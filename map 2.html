@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CP Station 409 — Map</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg:         #3a3f44;
+    --surface:    #2e3338;
+    --panel:      #454c52;
+    --panel-lt:   #535b62;
+    --border:     #606870;
+    --teal:       #4dd9ec;
+    --teal-dim:   #2aabb8;
+    --teal-dark:  #1a7f8a;
+    --text:       #f0f4f5;
+    --text-dim:   #b8c8cc;
+    --text-label: #fffde0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Courier New', monospace; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  header { background: var(--surface); border-bottom: 2px solid var(--teal-dark); padding: 9px 16px; display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+  header h1 { font-size: 13px; letter-spacing: 2px; color: var(--teal); text-transform: uppercase; white-space: nowrap; font-weight: bold; }
+  .mode-btns { display: flex; gap: 6px; margin-left: auto; }
+  .mode-btn { background: var(--panel); border: 1px solid var(--border); color: var(--text-dim); padding: 6px 14px; font-size: 11px; letter-spacing: 1px; cursor: pointer; text-transform: uppercase; font-family: inherit; transition: all .15s; border-radius: 2px; }
+  .mode-btn:hover { background: var(--panel-lt); color: var(--text); border-color: var(--teal-dim); }
+  .mode-btn.active { background: var(--teal-dark); border-color: var(--teal); color: #fff; }
+  .mode-btn.danger { border-color: #884444; color: #ff9999; }
+  .mode-btn.danger:hover { background: #882222; border-color: #ff5555; color: #fff; }
+
+  .main { display: flex; flex: 1; overflow: hidden; }
+
+  .sidebar { width: 270px; background: var(--surface); border-right: 2px solid var(--teal-dark); display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
+  .sidebar-section { border-bottom: 1px solid var(--border); padding: 11px 12px; }
+  .sec-title { font-size: 10px; letter-spacing: 2px; color: var(--text-label); text-transform: uppercase; font-weight: bold; margin-bottom: 8px; }
+
+  .upload-zone { border: 1px dashed var(--border); padding: 9px 10px; text-align: center; cursor: pointer; transition: all .15s; margin-bottom: 6px; border-radius: 2px; }
+  .upload-zone:hover { border-color: var(--teal); background: rgba(77,217,236,0.06); }
+  .upload-zone.has-file { border-color: var(--teal-dim); background: rgba(77,217,236,0.09); }
+  .upload-zone input { display: none; }
+  .uz-label { font-size: 10px; color: var(--text-dim); letter-spacing: 1px; text-transform: uppercase; }
+  .uz-file  { font-size: 10px; color: var(--teal); margin-top: 3px; word-break: break-all; }
+
+  .apply-btn { width: 100%; background: var(--teal-dark); border: 1px solid var(--teal); color: #fff; padding: 7px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; font-family: inherit; margin-top: 4px; transition: background .15s; border-radius: 2px; }
+  .apply-btn:hover { background: var(--teal-dim); }
+
+  .instructions { font-size: 10px; color: var(--text-dim); line-height: 1.7; padding: 9px 12px; border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.15); }
+  .instructions strong { color: var(--teal); }
+
+  .tp-header { padding: 6px 12px; font-size: 10px; color: var(--text-label); letter-spacing: 1px; border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.12); text-transform: uppercase; }
+  .tp-list { flex: 1; overflow-y: auto; padding: 6px; }
+  .tp-item { background: var(--panel); border: 1px solid var(--border); padding: 7px 9px; margin-bottom: 4px; cursor: pointer; transition: all .15s; display: flex; align-items: center; gap: 8px; border-radius: 2px; }
+  .tp-item:hover { border-color: var(--teal-dim); background: var(--panel-lt); }
+  .tp-dot { width: 13px; height: 13px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.3); }
+  .tp-info { flex: 1; min-width: 0; }
+  .tp-name { font-size: 11px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: bold; }
+  .tp-reads { font-size: 9px; color: var(--text-dim); margin-top: 2px; }
+  .tp-flag  { font-size: 9px; color: #ff8888; margin-top: 1px; }
+  .tp-del { background: none; border: none; color: var(--border); cursor: pointer; font-size: 16px; line-height: 1; flex-shrink: 0; padding: 0 2px; }
+  .tp-del:hover { color: #ff5555; }
+
+  .legend { padding: 10px 12px; border-top: 1px solid var(--border); background: rgba(0,0,0,0.1); flex-shrink: 0; }
+  .leg-item { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-size: 10px; color: var(--text-dim); }
+  .leg-dot  { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
+
+  .map-area { flex: 1; position: relative; overflow: hidden; background: #555; }
+  #map-canvas     { position: absolute; top: 0; left: 0; cursor: crosshair; display: block; }
+  #overlay-canvas { position: absolute; top: 0; left: 0; pointer-events: none; display: block; }
+
+  .drop-prompt { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; color: var(--text-dim); pointer-events: none; user-select: none; }
+  .drop-prompt .icon { font-size: 52px; margin-bottom: 14px; opacity: .4; }
+  .drop-prompt p { font-size: 12px; letter-spacing: 1px; text-transform: uppercase; opacity: .6; }
+
+  .pdf-controls { position: absolute; bottom: 12px; right: 12px; display: flex; gap: 5px; z-index: 10; }
+  .pdf-btn { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 5px 11px; font-size: 13px; cursor: pointer; font-family: inherit; border-radius: 2px; transition: all .15s; }
+  .pdf-btn:hover { border-color: var(--teal); color: var(--teal); background: var(--panel); }
+
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: none; align-items: center; justify-content: center; z-index: 200; }
+  .modal-bg.open { display: flex; }
+  .modal { background: var(--surface); border: 2px solid var(--teal-dark); padding: 22px; width: 310px; border-radius: 3px; box-shadow: 0 8px 32px rgba(0,0,0,.5); }
+  .modal h3 { font-size: 11px; letter-spacing: 2px; color: var(--text-label); text-transform: uppercase; margin-bottom: 16px; font-weight: bold; }
+  .modal label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 4px; }
+  .modal input { width: 100%; background: var(--panel); border: 1px solid var(--border); color: var(--text); padding: 8px 10px; font-size: 12px; font-family: inherit; margin-bottom: 13px; border-radius: 2px; }
+  .modal input:focus { outline: none; border-color: var(--teal); }
+  .modal-btns { display: flex; gap: 8px; }
+  .btn-save { flex: 1; background: var(--teal-dark); border: 1px solid var(--teal); color: #fff; padding: 8px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; font-family: inherit; border-radius: 2px; transition: background .15s; }
+  .btn-save:hover { background: var(--teal-dim); }
+  .btn-cancel { background: var(--panel); border: 1px solid var(--border); color: var(--text-dim); padding: 8px 14px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; font-family: inherit; border-radius: 2px; transition: all .15s; }
+  .btn-cancel:hover { border-color: var(--text-dim); color: var(--text); }
+
+  .status-bar { background: var(--surface); border-top: 1px solid var(--border); padding: 5px 14px; font-size: 10px; color: var(--text-dim); letter-spacing: 1px; flex-shrink: 0; display: flex; gap: 20px; align-items: center; }
+  .lbl { color: var(--text-label); }
+  .val { color: var(--teal); }
+  #status-msg { margin-left: auto; color: var(--text-dim); font-style: italic; }
+
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: var(--surface); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⚡ CP Station 409 — Map Module</h1>
+  <div class="mode-btns">
+    <button class="mode-btn active" id="btn-place" onclick="setMode('place')">📍 Place Pins</button>
+    <button class="mode-btn"        id="btn-view"  onclick="setMode('view')">👁 View Only</button>
+    <button class="mode-btn danger"                onclick="clearAll()">✕ Clear All</button>
+  </div>
+</header>
+
+<div class="main">
+  <div class="sidebar">
+
+    <div class="sidebar-section">
+      <div class="sec-title">Station Map (PDF)</div>
+      <div class="upload-zone" id="pdf-zone" onclick="document.getElementById('pdf-input').click()">
+        <input type="file" id="pdf-input" accept=".pdf" onchange="loadPDF(this)">
+        <div class="uz-label">Click to upload PDF map</div>
+        <div class="uz-file" id="pdf-name">No file loaded</div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sec-title">MV Potential Data (XLSX / CSV)</div>
+      <div class="upload-zone" id="data-zone" onclick="document.getElementById('data-input').click()">
+        <input type="file" id="data-input" accept=".xlsx,.xls,.csv" onchange="loadData(this)">
+        <div class="uz-label">Click to upload spreadsheet</div>
+        <div class="uz-file" id="data-name">No file loaded</div>
+      </div>
+      <button class="apply-btn" onclick="applyDataToPoints()">▶ Apply Data → Recolor Circles</button>
+    </div>
+
+    <div class="instructions">
+      <strong>How to use:</strong><br>
+      1. Upload station PDF map<br>
+      2. Select <strong>Place Pins</strong> mode<br>
+      3. Click map to place a test point<br>
+      4. Enter TP number &amp; address<br>
+      5. Upload MV spreadsheet<br>
+      6. Click <strong>Apply Data → Recolor</strong>
+    </div>
+
+    <div class="tp-header">Test Points &nbsp;(<span id="tp-count">0</span>)</div>
+    <div class="tp-list" id="tp-list"></div>
+
+    <div class="legend">
+      <div class="sec-title">Color Scale (dynamic)</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#ff5555"></div> Critical — lowest off / low differential</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#ffaa33"></div> Concern — below average</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#ffe033"></div> Monitor — marginal</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#44ee77"></div> Acceptable</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#909090"></div> No data matched</div>
+    </div>
+
+  </div>
+
+  <div class="map-area" id="map-area">
+    <canvas id="map-canvas"></canvas>
+    <canvas id="overlay-canvas"></canvas>
+    <div class="drop-prompt" id="drop-prompt">
+      <div class="icon">🗺️</div>
+      <p>Upload a PDF station map to begin</p>
+    </div>
+    <div class="pdf-controls" id="pdf-controls" style="display:none">
+      <button class="pdf-btn" onclick="zoomOut()">−</button>
+      <button class="pdf-btn" id="zoom-label">100%</button>
+      <button class="pdf-btn" onclick="zoomIn()">+</button>
+      <button class="pdf-btn" onclick="fitPage()">Fit</button>
+    </div>
+  </div>
+</div>
+
+<div class="status-bar">
+  <div><span class="lbl">MODE:</span> <span class="val" id="status-mode">PLACE PINS</span></div>
+  <div><span class="lbl">PINS:</span> <span class="val" id="status-pins">0</span></div>
+  <div><span class="lbl">DATA:</span> <span class="val" id="status-data">NO DATA LOADED</span></div>
+  <div id="status-msg"></div>
+</div>
+
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <h3>📍 New Test Point</h3>
+    <label>Test Point Number</label>
+    <input type="text" id="tp-num" placeholder="e.g. TP 1  or  TP 12">
+    <label>Address / Location</label>
+    <input type="text" id="tp-addr" placeholder="e.g. 1035 Reef Dr">
+    <div class="modal-btns">
+      <button class="btn-save"   onclick="savePin()">Save Pin</button>
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const CIRCLE_R  = 30;
+const STORE_KEY = 'cp409_v2_pins';
+const DIFF_LOW  = 60;
+
+const COLORS = {
+  red:    { fill:'rgba(220,60,60,0.35)',   stroke:'#ff5555' },
+  orange: { fill:'rgba(220,140,30,0.35)',  stroke:'#ffaa33' },
+  yellow: { fill:'rgba(220,210,40,0.35)',  stroke:'#ffe033' },
+  green:  { fill:'rgba(50,200,90,0.35)',   stroke:'#44ee77' },
+  none:   { fill:'rgba(140,140,140,0.2)',  stroke:'#909090' },
+};
+
+let mode = 'place', pins = [], mvData = [];
+let pdfDoc = null, pdfPage = null, scale = 1.0, pendingPin = null;
+
+const mapCanvas     = document.getElementById('map-canvas');
+const overlayCanvas = document.getElementById('overlay-canvas');
+const mapCtx        = mapCanvas.getContext('2d');
+const overlayCtx    = overlayCanvas.getContext('2d');
+
+function savePins() { try { localStorage.setItem(STORE_KEY, JSON.stringify(pins)); } catch(e){} }
+function loadPins() { try { const r = localStorage.getItem(STORE_KEY); if(r) pins = JSON.parse(r); } catch(e){ pins=[]; } }
+
+function setMode(m) {
+  mode = m;
+  document.getElementById('btn-place').classList.toggle('active', m==='place');
+  document.getElementById('btn-view').classList.toggle('active',  m==='view');
+  mapCanvas.style.cursor = m==='place' ? 'crosshair' : 'grab';
+  document.getElementById('status-mode').textContent = m==='place' ? 'PLACE PINS' : 'VIEW ONLY';
+}
+
+async function loadPDF(input) {
+  const file = input.files[0]; if(!file) return;
+  document.getElementById('pdf-name').textContent = file.name;
+  document.getElementById('pdf-zone').classList.add('has-file');
+  document.getElementById('drop-prompt').style.display = 'none';
+  const buf = await file.arrayBuffer();
+  pdfDoc  = await pdfjsLib.getDocument({ data: buf }).promise;
+  pdfPage = await pdfDoc.getPage(1);
+  fitPage();
+  document.getElementById('pdf-controls').style.display = 'flex';
+  setMsg('PDF loaded — ' + file.name);
+}
+
+async function renderPDF() {
+  if(!pdfPage) return;
+  const vp = pdfPage.getViewport({ scale });
+  mapCanvas.width = overlayCanvas.width  = vp.width;
+  mapCanvas.height = overlayCanvas.height = vp.height;
+  await pdfPage.render({ canvasContext: mapCtx, viewport: vp }).promise;
+  drawOverlay();
+}
+
+function fitPage() {
+  if(!pdfPage) return;
+  const area = document.getElementById('map-area');
+  const vp   = pdfPage.getViewport({ scale:1 });
+  scale = Math.min(area.clientWidth/vp.width, area.clientHeight/vp.height) * 0.97;
+  document.getElementById('zoom-label').textContent = Math.round(scale*100)+'%';
+  renderPDF();
+}
+function zoomIn()  { scale = Math.min(scale*1.2,5);   document.getElementById('zoom-label').textContent=Math.round(scale*100)+'%'; renderPDF(); }
+function zoomOut() { scale = Math.max(scale/1.2,0.2); document.getElementById('zoom-label').textContent=Math.round(scale*100)+'%'; renderPDF(); }
+
+mapCanvas.addEventListener('click', e => {
+  if(mode !== 'place') return;
+  const rect = mapCanvas.getBoundingClientRect();
+  pendingPin = { x:(e.clientX-rect.left)/scale, y:(e.clientY-rect.top)/scale };
+  const nums = pins.map(p=>parseInt(p.tpNum.replace(/\D/g,''))).filter(n=>!isNaN(n));
+  document.getElementById('tp-num').value  = 'TP ' + (nums.length ? Math.max(...nums)+1 : 1);
+  document.getElementById('tp-addr').value = '';
+  document.getElementById('modal').classList.add('open');
+  setTimeout(()=>document.getElementById('tp-addr').focus(), 60);
+});
+
+function savePin() {
+  const tpNum = document.getElementById('tp-num').value.trim();
+  const addr  = document.getElementById('tp-addr').value.trim();
+  if(!tpNum||!addr) { alert('Please fill in both fields.'); return; }
+  pins.push({ id:Date.now(), tpNum, address:addr, x:pendingPin.x, y:pendingPin.y, color:'none', offRead:null, onRead:null, diff:null });
+  savePins(); closeModal(); drawOverlay(); renderSidebar();
+  setMsg('Pin saved: '+tpNum+' @ '+addr);
+}
+
+function closeModal() { document.getElementById('modal').classList.remove('open'); pendingPin=null; }
+document.getElementById('modal').addEventListener('click', e => { if(e.target===document.getElementById('modal')) closeModal(); });
+document.addEventListener('keydown', e => {
+  if(e.key==='Escape') closeModal();
+  if(e.key==='Enter' && document.getElementById('modal').classList.contains('open')) savePin();
+});
+
+async function loadData(input) {
+  const file = input.files[0]; if(!file) return;
+  document.getElementById('data-name').textContent = file.name;
+  document.getElementById('data-zone').classList.add('has-file');
+  const buf = await file.arrayBuffer();
+  const wb  = XLSX.read(buf, { type:'array', cellDates:true });
+  mvData = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval:'' });
+  document.getElementById('status-data').textContent = mvData.length+' ROWS';
+  setMsg('Spreadsheet loaded — '+mvData.length+' rows. Click "Apply Data → Recolor".');
+}
+
+function applyDataToPoints() {
+  if(!mvData.length) { setMsg('⚠ No spreadsheet loaded.'); return; }
+
+  // Group reads by normalized TP key
+  const groups = {};
+  for(const row of mvData) {
+    const point = String(row['Point']||row['point']||'').trim();
+    if(!point || point.startsWith('R ')) continue;
+    const readStr = String(row['Read']||row['MV']||'').replace(/[Vv]/g,'').trim();
+    const read    = parseFloat(readStr);
+    if(isNaN(read)) continue;
+    const addr    = String(row['Location']||row['Address']||'').trim();
+    const normKey = point.replace(/\.0+$/,'').replace(/\s+/g,' ');
+    if(!groups[normKey]) groups[normKey] = { addr, reads:[] };
+    const dv   = row['Read Date']||row['Date']||'';
+    const date = dv instanceof Date ? dv : new Date(dv);
+    groups[normKey].reads.push({ read, date });
+  }
+
+  // Extract latest on/off pair per TP
+  const analysis = {};
+  for(const [key, g] of Object.entries(groups)) {
+    if(!g.reads.length) continue;
+    const latestDate = g.reads.reduce((a,b)=>b.date>a.date?b:a).date;
+    const latestStr  = latestDate instanceof Date && !isNaN(latestDate) ? latestDate.toDateString() : String(latestDate);
+    const vals = g.reads.filter(r=>{
+      const ds = r.date instanceof Date && !isNaN(r.date) ? r.date.toDateString() : String(r.date);
+      return ds===latestStr;
+    }).map(r=>r.read);
+    if(vals.length < 2) continue;
+    const offRead = Math.max(...vals); // numerically highest = least negative = off
+    const onRead  = Math.min(...vals); // numerically lowest  = most negative  = on
+    const diff    = Math.round(Math.abs(onRead-offRead)*1000);
+    analysis[key] = { offRead, onRead, diff, addr:g.addr };
+  }
+
+  if(!Object.keys(analysis).length) { setMsg('⚠ Could not parse on/off pairs.'); return; }
+
+  // Dynamic scale
+  const offVals = Object.values(analysis).map(a=>a.offRead);
+  const minOff  = Math.min(...offVals);
+  const maxOff  = Math.max(...offVals);
+  const range   = maxOff - minOff || 0.001;
+
+  let matched = 0;
+  for(const pin of pins) {
+    const normPin = pin.tpNum.trim().replace(/\.0+$/,'').replace(/\s+/g,' ');
+    let a = analysis[normPin];
+    if(!a) {
+      const words = pin.address.toLowerCase().split(/\s+/).slice(0,2);
+      for(const [,v] of Object.entries(analysis)) {
+        if(words.every(w=>v.addr.toLowerCase().includes(w))) { a=v; break; }
+      }
+    }
+    if(a) {
+      pin.offRead = a.offRead; pin.onRead = a.onRead; pin.diff = a.diff;
+      const norm    = (a.offRead - minOff) / range;
+      const lowDiff = a.diff < DIFF_LOW;
+      const bothBad = a.offRead > -0.500 && lowDiff;
+      pin.color = bothBad || norm < 0.25 ? 'red'
+                : norm < 0.5 || lowDiff  ? 'orange'
+                : norm < 0.75            ? 'yellow' : 'green';
+      matched++;
+    } else {
+      pin.color = 'none'; pin.offRead = pin.onRead = pin.diff = null;
+    }
+  }
+
+  savePins(); drawOverlay(); renderSidebar();
+  setMsg(`✔ ${matched} of ${pins.length} pins matched and colored.`);
+}
+
+function drawOverlay() {
+  overlayCtx.clearRect(0,0,overlayCanvas.width,overlayCanvas.height);
+  for(const pin of pins) {
+    const sx=pin.x*scale, sy=pin.y*scale, r=CIRCLE_R*scale;
+    const c=COLORS[pin.color]||COLORS.none;
+    const label=pin.tpNum.replace(/TP\s*/i,'');
+
+    overlayCtx.beginPath(); overlayCtx.arc(sx,sy,r,0,Math.PI*2);
+    overlayCtx.fillStyle=c.fill; overlayCtx.fill();
+    overlayCtx.strokeStyle=c.stroke; overlayCtx.lineWidth=Math.max(1.5,1.8*scale); overlayCtx.stroke();
+
+    overlayCtx.beginPath(); overlayCtx.arc(sx,sy,Math.max(3,4*scale),0,Math.PI*2);
+    overlayCtx.fillStyle=c.stroke; overlayCtx.fill();
+
+    const fs=Math.max(9,Math.min(13,11*scale));
+    overlayCtx.font=`bold ${fs}px Courier New`;
+    overlayCtx.textAlign='center'; overlayCtx.textBaseline='middle';
+    overlayCtx.fillStyle='#ffffff';
+    overlayCtx.shadowColor='rgba(0,0,0,0.8)'; overlayCtx.shadowBlur=3;
+    overlayCtx.fillText(label,sx,sy);
+    overlayCtx.shadowBlur=0;
+
+    if(pin.offRead!==null) {
+      const sfs=Math.max(7,Math.min(10,8*scale));
+      overlayCtx.font=`${sfs}px Courier New`;
+      overlayCtx.fillStyle=c.stroke;
+      overlayCtx.shadowColor='rgba(0,0,0,0.9)'; overlayCtx.shadowBlur=4;
+      overlayCtx.fillText(pin.offRead.toFixed(3)+'V', sx, sy+r+9*scale);
+      overlayCtx.shadowBlur=0;
+    }
+  }
+  document.getElementById('status-pins').textContent = pins.length;
+  document.getElementById('tp-count').textContent    = pins.length;
+}
+
+function renderSidebar() {
+  const list=document.getElementById('tp-list');
+  list.innerHTML='';
+  [...pins].sort((a,b)=>{
+    const n=s=>parseInt(s.replace(/\D/g,''))||0;
+    return n(a.tpNum)-n(b.tpNum);
+  }).forEach(pin=>{
+    const c=COLORS[pin.color]||COLORS.none;
+    const div=document.createElement('div');
+    div.className='tp-item';
+    let reads='<span style="color:#777">No data matched</span>';
+    let flags='';
+    if(pin.offRead!==null) {
+      reads=`Off: ${pin.offRead.toFixed(3)}V &nbsp;|&nbsp; On: ${pin.onRead.toFixed(3)}V &nbsp;|&nbsp; Δ${pin.diff}mV`;
+      const f=[];
+      if(pin.offRead > -0.500) f.push('LOW OFF-READ');
+      if(pin.diff < DIFF_LOW)  f.push('LOW DIFFERENTIAL');
+      if(f.length) flags=`<div class="tp-flag">⚠ ${f.join(' · ')}</div>`;
+    }
+    div.innerHTML=`
+      <div class="tp-dot" style="background:${c.stroke}"></div>
+      <div class="tp-info">
+        <div class="tp-name">${pin.tpNum} &mdash; ${pin.address}</div>
+        <div class="tp-reads">${reads}</div>${flags}
+      </div>
+      <button class="tp-del" title="Delete" onclick="deletePin(${pin.id},event)">×</button>`;
+    div.addEventListener('click',()=>flashPin(pin));
+    list.appendChild(div);
+  });
+}
+
+function deletePin(id,e) {
+  e.stopPropagation();
+  if(!confirm('Delete this pin?')) return;
+  pins=pins.filter(p=>p.id!==id);
+  savePins(); drawOverlay(); renderSidebar();
+}
+
+function flashPin(pin) {
+  let n=0;
+  const iv=setInterval(()=>{
+    drawOverlay();
+    overlayCtx.beginPath(); overlayCtx.arc(pin.x*scale,pin.y*scale,(CIRCLE_R+12)*scale,0,Math.PI*2);
+    overlayCtx.strokeStyle='#ffffff'; overlayCtx.lineWidth=2.5; overlayCtx.stroke();
+    if(++n>5) clearInterval(iv);
+  },130);
+}
+
+function clearAll() {
+  if(!confirm('Delete ALL pins?')) return;
+  pins=[]; savePins(); drawOverlay(); renderSidebar(); setMsg('All pins cleared.');
+}
+
+function setMsg(msg) { document.getElementById('status-msg').textContent=msg; }
+
+loadPins(); renderSidebar(); drawOverlay(); setMode('place');
+</script>
+</body>
+</html>
