@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CP Scout — Cathodic Protection Field Analysis</title>
+<style>
+  :root {
+    --bg:       #3a3f44;
+    --surface:  #2e3338;
+    --panel:    #4a5058;
+    --border:   #6a737d;
+    --teal:     #4dd9e8;
+    --teal-dim: #2aabb8;
+    --teal-dark:#1a8090;
+    --text:     #f0f4f5;
+    --text-dim: #c0cdd0;
+    --text-muted:#8a9ea3;
+    --red:      #f04040;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Courier New', monospace; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* NAV BAR */
+  nav { background: var(--surface); border-bottom: 2px solid var(--teal-dark); display: flex; align-items: center; padding: 0 16px; flex-shrink: 0; height: 48px; }
+  .nav-brand { display: flex; align-items: center; gap: 10px; margin-right: 24px; }
+  .nav-brand .logo { font-size: 16px; font-weight: bold; color: var(--teal); letter-spacing: 2px; text-transform: uppercase; text-shadow: 0 0 10px rgba(77,217,232,0.4); white-space: nowrap; }
+  .nav-brand .tagline { font-size: 9px; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; }
+  .nav-tabs { display: flex; gap: 2px; flex: 1; }
+  .nav-tab { padding: 0 18px; height: 48px; display: flex; align-items: center; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; color: var(--text-dim); border-bottom: 3px solid transparent; text-decoration: none; transition: all .15s; font-family: inherit; background: none; border-top: none; border-left: none; border-right: none; white-space: nowrap; }
+  .nav-tab:hover { color: var(--teal); background: rgba(77,217,232,0.05); }
+  .nav-tab.active { color: var(--teal); border-bottom-color: var(--teal); background: rgba(77,217,232,0.08); font-weight: bold; }
+  .nav-tab .tab-icon { margin-right: 6px; }
+  .nav-station { margin-left: auto; font-size: 10px; color: var(--text-muted); letter-spacing: 1px; white-space: nowrap; }
+  .nav-station span { color: var(--teal); font-weight: bold; }
+
+  /* IFRAME CONTENT */
+  .content-frame { flex: 1; border: none; width: 100%; }
+
+  /* LANDING PAGE (shown when no tab selected) */
+  .landing { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; padding: 40px; }
+  .landing h2 { font-size: 22px; color: var(--teal); letter-spacing: 3px; text-transform: uppercase; text-shadow: 0 0 20px rgba(77,217,232,0.3); }
+  .landing p { font-size: 12px; color: var(--text-dim); letter-spacing: 1px; text-align: center; max-width: 500px; line-height: 1.8; }
+  .landing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; max-width: 700px; width: 100%; margin-top: 8px; }
+  .landing-card { background: var(--surface); border: 1px solid var(--border); padding: 20px; cursor: pointer; transition: all .2s; text-align: center; text-decoration: none; display: block; }
+  .landing-card:hover { border-color: var(--teal); background: rgba(77,217,232,0.06); transform: translateY(-2px); }
+  .landing-card .card-icon { font-size: 28px; margin-bottom: 10px; }
+  .landing-card .card-title { font-size: 11px; color: var(--teal); letter-spacing: 2px; text-transform: uppercase; font-weight: bold; margin-bottom: 6px; }
+  .landing-card .card-desc { font-size: 10px; color: var(--text-muted); line-height: 1.6; }
+  .landing-card.coming-soon { opacity: 0.5; cursor: default; }
+  .landing-card.coming-soon:hover { border-color: var(--border); background: var(--surface); transform: none; }
+  .badge { display: inline-block; font-size: 8px; background: var(--teal-dark); color: #fff; padding: 1px 6px; letter-spacing: 1px; text-transform: uppercase; margin-top: 6px; }
+  .badge.soon { background: var(--panel); color: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand">
+    <div>
+      <div class="logo">⚡ CP Scout</div>
+      <div class="tagline">Cathodic Protection Field Analysis</div>
+    </div>
+  </div>
+  <div class="nav-tabs">
+    <a class="nav-tab" href="overview.html"><span class="tab-icon">📊</span>Overview</a>
+    <a class="nav-tab" href="map.html"><span class="tab-icon">🗺️</span>Map</a>
+    <a class="nav-tab coming" href="trends.html"><span class="tab-icon">📈</span>Trends</a>
+    <a class="nav-tab coming" href="field-entry.html"><span class="tab-icon">📋</span>Field Entry</a>
+    <a class="nav-tab coming" href="report.html"><span class="tab-icon">📄</span>Report</a>
+  </div>
+  <div class="nav-station">Station: <span>409</span></div>
+</nav>
+
+<div class="landing">
+  <h2>CP Scout</h2>
+  <p>Cathodic protection field analysis and troubleshooting platform.<br>Select a module below to begin.</p>
+
+  <div class="landing-grid">
+    <a class="landing-card" href="overview.html">
+      <div class="card-icon">📊</div>
+      <div class="card-title">Overview</div>
+      <div class="card-desc">Survey data analysis, alert grouping, cycle comparison and trend flags</div>
+      <div class="badge">Active</div>
+    </a>
+    <a class="landing-card" href="map.html">
+      <div class="card-icon">🗺️</div>
+      <div class="card-title">Map</div>
+      <div class="card-desc">Color-coded station map with test point overlays and detail popups</div>
+      <div class="badge">Active</div>
+    </a>
+    <a class="landing-card coming-soon" href="#">
+      <div class="card-icon">📈</div>
+      <div class="card-title">Trends</div>
+      <div class="card-desc">Historical MV potential charts across survey cycles per test point</div>
+      <div class="badge soon">Coming Soon</div>
+    </a>
+    <a class="landing-card coming-soon" href="#">
+      <div class="card-icon">📋</div>
+      <div class="card-title">Field Entry</div>
+      <div class="card-desc">On/off reads, bond checks, PCM data and rectifier readings</div>
+      <div class="badge soon">Coming Soon</div>
+    </a>
+    <a class="landing-card coming-soon" href="#">
+      <div class="card-icon">📄</div>
+      <div class="card-title">Report</div>
+      <div class="card-desc">Generate troubleshooting reports from collected field data</div>
+      <div class="badge soon">Coming Soon</div>
+    </a>
+    <a class="landing-card coming-soon" href="#">
+      <div class="card-icon">⚙️</div>
+      <div class="card-title">Stations</div>
+      <div class="card-desc">Station library management — add, switch and configure CP stations</div>
+      <div class="badge soon">Coming Soon</div>
+    </a>
+  </div>
+</div>
+
+<script>
+  // Highlight active tab based on current page
+  const page = window.location.pathname.split('/').pop() || 'index.html';
+  document.querySelectorAll('.nav-tab').forEach(tab => {
+    if (tab.getAttribute('href') === page) tab.classList.add('active');
+  });
+</script>
+</body>
+</html>
