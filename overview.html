@@ -210,86 +210,66 @@ function handleFile(input) {
 }
 
 // ── COLUMN DETECTION ──────────────────────────────────────────────────────────
-// Detects which columns contain the useful data regardless of exact header names
 function detectColumns(rows) {
-  // First row may be headers or data — scan first 3 rows for clues
-  // We identify columns by content patterns:
-  // - Station col: contains "STA" 
-  // - Point col: contains "TP" or "R 1" patterns
-  // - Address col: contains street addresses (numbers + street names)
-  // - Read col: contains voltage values like "-0.490 V" or "0.000 V"
-  // - Date col: contains date objects or date strings
-  // - ReadBy col: contains short usernames
-  // - ReadType col: contains "IO" or "ON" or "Present Read"
-
-  const cols = { station: -1, point: -1, address: -1, city: -1, read: -1, date: -1, readBy: -1, readType: -1 };
-
-  // Scan up to 20 rows to identify column patterns
+  const cols = {
+    station:-1, point:-1, address:-1, city:-1,
+    read:-1, date:-1, readBy:-1, readType:-1,
+    lowerLimit:-1, upperLimit:-1
+  };
   const sample = rows.slice(0, Math.min(20, rows.length));
 
-  for (let c = 0; c < (rows[0] || []).length; c++) {
-    const vals = sample.map(r => String(r[c] || '').trim()).filter(v => v);
-    const joined = vals.join('|').toLowerCase();
+  // Use header row if present
+  const hdr = rows[0] || [];
+  hdr.forEach((h, i) => {
+    const s = String(h).toLowerCase().trim();
+    if (s === 'area' || s.includes('sta '))               cols.station    = i;
+    if (s === 'point')                                     cols.point      = i;
+    if (s === 'location')                                  cols.address    = i;
+    if (s === 'city')                                      cols.city       = i;
+    if (s === 'read' && cols.read === -1)                  cols.read       = i;
+    if (s === 'read date' || s === 'read_date')            cols.date       = i;
+    if (s === 'read by' || s === 'read_by')                cols.readBy     = i;
+    if (s.includes('measurement point characteristic') ||
+        s.includes('present read') || s === 'read type')  cols.readType   = i;
+    if (s === 'lower limit' || s === 'lower_limit')        cols.lowerLimit = i;
+    if (s === 'upper limit' || s === 'upper_limit')        cols.upperLimit = i;
+  });
 
-    // Station: "STA 409" pattern
-    if (cols.station === -1 && vals.some(v => /^sta\s*\d+$/i.test(v))) cols.station = c;
-    // Point: "TP 1.000" or "R 1.000" pattern
-    if (cols.point === -1 && vals.some(v => /^(tp|r)\s*\d+(\.\d+)?$/i.test(v.trim()))) cols.point = c;
-    // Address: number followed by street name
-    if (cols.address === -1 && vals.filter(v => /^\d+\s+\w/.test(v)).length >= 3) cols.address = c;
-    // City: mostly "San Diego" or similar
-    if (cols.city === -1 && vals.filter(v => /^[A-Z][a-z]+ [A-Z][a-z]+$/.test(v)).length >= 3) cols.city = c;
-    // Read: voltage value "-0.490 V" or "0.000 V"
-    if (cols.read === -1 && vals.filter(v => /^-?\d+\.\d+\s*V$/i.test(v)).length >= 3) cols.read = c;
-    // ReadType: "Present Read IO" or "Present Read ON" or "IO"/"ON"
-    if (cols.readType === -1 && (joined.includes('present read') || joined.includes(' io') || joined.includes(' on'))) {
-      if (vals.some(v => /IO|ON|OFF/i.test(v))) cols.readType = c;
-    }
-    // Date: date objects or date strings - look for column with many date values
-    if (cols.date === -1) {
-      const dateLike = vals.filter(v => {
-        if (v instanceof Date) return true;
-        return /^\d{4}-\d{2}-\d{2}/.test(v) || /\d{1,2}\/\d{1,2}\/\d{4}/.test(v);
-      });
-      if (dateLike.length >= 3) cols.date = c;
-    }
-    // ReadBy: short alphanumeric username (not a number, not too long)
-    if (cols.readBy === -1 && vals.filter(v => /^[a-z0-9]{4,12}$/i.test(v) && !/^\d+$/.test(v) && !/V$/.test(v)).length >= 3) {
-      cols.readBy = c;
-    }
-  }
-
-  // Fallback: use known positions from Book2 format if detection fails
-  if (cols.station === -1) cols.station = 2;
-  if (cols.point   === -1) cols.point   = 3;
-  if (cols.address === -1) cols.address = 6;
-  if (cols.city    === -1) cols.city    = 7;
-  if (cols.read    === -1) cols.read    = 16;
-  if (cols.readType=== -1) cols.readType= 24;
-  if (cols.readBy  === -1) cols.readBy  = 18;
-  // For date: find the last date-like column among the detected ones
-  if (cols.date    === -1) cols.date    = 19;
+  // Fallbacks for Book2 format
+  if (cols.station    === -1) cols.station    = 2;
+  if (cols.point      === -1) cols.point      = 3;
+  if (cols.address    === -1) cols.address    = 6;
+  if (cols.city       === -1) cols.city       = 7;
+  if (cols.read       === -1) cols.read       = 16;
+  if (cols.readBy     === -1) cols.readBy     = 18;
+  if (cols.date       === -1) cols.date       = 19;
+  if (cols.lowerLimit === -1) cols.lowerLimit = 20;
+  if (cols.upperLimit === -1) cols.upperLimit = 21;
+  if (cols.readType   === -1) cols.readType   = 24;
 
   return cols;
 }
 
+function normTP(s) {
+  return String(s).replace(/TP\s*/i,'').replace(/\.000$/,'').replace(/\.0+$/,'').trim();
+}
+
 // ── PARSE DATA ────────────────────────────────────────────────────────────────
-// Jason's format: each address appears TWICE per cycle.
-// First occurrence = OFF-read (rectifier off, less negative, e.g. -0.490V)
-// Second occurrence = ON-read  (rectifier on,  more negative, e.g. -0.540V)
-// This positional rule is the primary on/off detection method.
+// Uses Present Read IO = off-read, Present Read ON = on-read
+// Lower Limit column = passing threshold directly from system
 function parseData(rows) {
   const cols = detectColumns(rows);
-
-  // Step 1: collect all valid rows with reads and dates
-  const raw = [];
-  const startRow = String(rows[0]?.[cols.point] || '').match(/^(tp|r)\s*\d/i) ? 0 : 1;
+  const records = [];
+  // Skip header row
+  const startRow = 1;
 
   for (let i = startRow; i < rows.length; i++) {
     const row   = rows[i];
     const point = String(row[cols.point] || '').trim();
     if (!point || !/^(tp|r)\s*\d/i.test(point)) continue;
-    if (/^r\s*\d+\.?\d*\s*[av]/i.test(point)) continue; // skip rectifier rows
+
+    // Skip rectifier amp/volt rows for TP analysis (keep for rectifier panel)
+    const isRect = /^r\s*\d/i.test(point);
 
     const readStr = String(row[cols.read] || '').replace(/[Vv\s]/g,'').trim();
     const read    = parseFloat(readStr);
@@ -301,160 +281,185 @@ function parseData(rows) {
     else if (dv) { const d = new Date(dv); if (!isNaN(d)) date = d; }
     if (!date) continue;
 
-    // Use IO/ON flag as a hint but don't rely on it exclusively
+    // Read type from Measurement Point Characteristic Name column
     const rt = String(row[cols.readType] || '').toUpperCase();
-    const rtHint = rt.includes('IO') || rt.includes(' I ') ? 'off'
-                 : rt.includes('ON') ? 'on' : 'unknown';
+    let readType = 'unknown';
+    if (rt.includes('IO') || rt.includes(' I ')) readType = 'off';
+    else if (rt.includes('ON'))                  readType = 'on';
 
-    raw.push({
-      station: String(row[cols.station] || '').trim(),
-      point:   normTP(point),
-      address: String(row[cols.address] || '').trim(),
-      city:    String(row[cols.city]    || '').trim(),
-      read, date, rtHint,
-      readBy:  String(row[cols.readBy]  || '').trim(),
+    // Lower limit = passing threshold
+    const llStr = String(row[cols.lowerLimit] || '').replace(/[Vv\s]/g,'').trim();
+    const lowerLimit = parseFloat(llStr) || null;
+
+    records.push({
+      station:    String(row[cols.station] || '').trim(),
+      point:      normTP(point),
+      address:    String(row[cols.address] || '').trim(),
+      city:       String(row[cols.city]    || '').trim(),
+      read, readType, date, lowerLimit, isRect,
+      readBy:     String(row[cols.readBy]  || '').trim(),
     });
   }
-
-  // Step 2: Group by point+date, assign on/off positionally
-  // Within each (point, dateKey) group: first row = off, second row = on
-  // Confirm with numeric rule: higher value (less negative) = off
-  const records = [];
-  const seen = {}; // key: point+dateKey -> count of appearances
-
-  for (const r of raw) {
-    const dk  = r.date.toISOString().slice(0,10);
-    const key = r.point + '|' + dk;
-    if (!seen[key]) seen[key] = 0;
-    seen[key]++;
-    const occurrence = seen[key]; // 1 = first = off, 2 = second = on
-
-    let readType;
-    // Primary: positional
-    if (occurrence === 1) readType = 'off';
-    else if (occurrence === 2) readType = 'on';
-    else continue; // more than 2 reads for same point+date — skip extras
-
-    // Cross-check with IO/ON hint if available
-    if (r.rtHint !== 'unknown' && r.rtHint !== readType) {
-      // Hint disagrees — trust numeric rule as tiebreaker
-      // (less negative = off, more negative = on)
-      // We'll resolve this in the analyze step using Math.max/min
-      readType = r.rtHint;
-    }
-
-    records.push({ ...r, readType });
-  }
-
   return records;
-}
-
-function normTP(s) {
-  return String(s).replace(/TP\s*/i,'').replace(/\.000$/,'').replace(/\.0+$/,'').trim();
 }
 
 // ── ANALYZE ───────────────────────────────────────────────────────────────────
 function analyze(records) {
-  // Group by point — collect both reads per cycle then assign on/off
+  // Separate rectifier records
+  const rectRecords = records.filter(r => r.isRect);
+  const tpRecords   = records.filter(r => !r.isRect);
+
+  // Group TP records by point
   const byPoint = {};
-  for (const r of records) {
+  for (const r of tpRecords) {
     if (!byPoint[r.point]) byPoint[r.point] = { address: r.address, cycles: {} };
     const dk = r.date.toISOString().slice(0,10);
-    if (!byPoint[r.point].cycles[dk]) byPoint[r.point].cycles[dk] = { reads: [], date: r.date };
-    byPoint[r.point].cycles[dk].reads.push(r.read);
-  }
-
-  // Assign on/off using Jason's rule:
-  // Higher numeric value (less negative) = OFF-read
-  // Lower numeric value  (more negative) = ON-read
-  for (const pt of Object.values(byPoint)) {
-    for (const cyc of Object.values(pt.cycles)) {
-      if (cyc.reads.length >= 2) {
-        cyc.off = Math.max(...cyc.reads); // least negative = off (rectifier off)
-        cyc.on  = Math.min(...cyc.reads); // most negative  = on  (rectifier on)
-      } else if (cyc.reads.length === 1) {
-        cyc.off = cyc.reads[0];
-        cyc.on  = null;
-      }
-      delete cyc.reads;
+    if (!byPoint[r.point].cycles[dk]) byPoint[r.point].cycles[dk] = {
+      on: null, off: null, date: r.date,
+      onLimit: null, offLimit: null
+    };
+    const cyc = byPoint[r.point].cycles[dk];
+    if (r.readType === 'on') {
+      cyc.on = r.read;
+      if (r.lowerLimit !== null) cyc.onLimit = r.lowerLimit;
+    } else if (r.readType === 'off') {
+      cyc.off = r.read;
+      if (r.lowerLimit !== null) cyc.offLimit = r.lowerLimit;
+    } else {
+      // Fallback: numeric rule — higher (less negative) = off
+      if (cyc.off === null && cyc.on === null) cyc.off = r.read;
+      else if (r.read > (cyc.off ?? -999))     cyc.off = r.read;
+      else                                      cyc.on  = r.read;
     }
   }
 
-  // Build per-point analysis
   const points = [];
   for (const [tp, data] of Object.entries(byPoint)) {
     const sortedCycles = Object.entries(data.cycles)
-      .map(([dk, v]) => ({ dateKey: dk, date: v.date, on: v.on, off: v.off }))
-      .filter(c => c.on !== null && c.off !== null)
-      .sort((a, b) => b.date - a.date); // newest first
+      .map(([dk, v]) => ({ dateKey: dk, ...v }))
+      .filter(c => c.on !== null || c.off !== null)
+      .sort((a, b) => new Date(b.dateKey) - new Date(a.dateKey));
 
     if (!sortedCycles.length) continue;
 
-    const latest    = sortedCycles[0];
-    const prior     = sortedCycles[1] || null;
-    const offRead   = latest.off;
-    const onRead    = latest.on;
-    const diff      = offRead !== null && onRead !== null ? Math.round(Math.abs(onRead - offRead) * 1000) : null;
+    const latest   = sortedCycles[0];
+    const prior    = sortedCycles[1] || null;
+    const offRead  = latest.off;
+    const onRead   = latest.on;
+    const offLimit = latest.offLimit; // passing threshold from spreadsheet
 
-    // Cycle delta (vs prior cycle)
-    const offDelta = (prior && prior.off !== null && offRead !== null)
-      ? Math.round((offRead - prior.off) * 1000) // positive = dropped (less negative)
-      : null;
-    const onDelta  = (prior && prior.on !== null && onRead !== null)
-      ? Math.round((onRead - prior.on) * 1000)
-      : null;
+    // Differential in mV
+    const diff = (offRead !== null && onRead !== null)
+      ? Math.round(Math.abs(onRead - offRead) * 1000) : null;
 
-    // Best historical off (most negative = best protection)
+    // Cycle delta — how much off-read changed from prior cycle
+    // Positive = dropped (less negative = worse)
+    const offDelta = (prior?.off !== null && prior?.off !== undefined && offRead !== null)
+      ? Math.round((offRead - prior.off) * 1000) : null;
+    const onDelta  = (prior?.on  !== null && prior?.on  !== undefined && onRead  !== null)
+      ? Math.round((onRead  - prior.on)  * 1000) : null;
+
     const bestOff = Math.min(...sortedCycles.filter(c => c.off !== null).map(c => c.off));
 
-    // Determine color
-    const allOffs   = Object.values(byPoint).map(d => {
-      const cycs = Object.values(d.cycles).filter(c => c.off !== null);
-      if (!cycs.length) return null;
-      return cycs.reduce((best, c) => c.date > best.date ? c : best).off;
-    }).filter(v => v !== null);
+    // ── SCORING — three independent criteria, worst wins ─────────────────────
 
-    const minOff = Math.min(...allOffs);
-    const maxOff = Math.max(...allOffs);
-    const range  = maxOff - minOff || 0.001;
-    const norm   = (offRead - minOff) / range;
-    const lowDiff = diff !== null && diff < 60;
+    // 1. PASS/FAIL vs lower limit
+    // Failing = off-read is numerically higher (less negative) than lower limit
+    let thresholdScore = 'green';
+    let failingThreshold = false;
+    if (offRead !== null && offLimit !== null) {
+      if (offRead > offLimit) {
+        failingThreshold = true;
+        thresholdScore = 'red';
+      }
+    } else if (offRead !== null) {
+      // No limit available — use bottom quartile logic (set later)
+      thresholdScore = 'unknown';
+    }
 
-    let color;
-    if (offRead > -0.500 && lowDiff)              color = 'red';
-    else if (norm < 0.25 || (lowDiff && norm < 0.5)) color = 'red';
-    else if (norm < 0.50 || lowDiff)              color = 'orange';
-    else if (norm < 0.75)                         color = 'yellow';
-    else                                          color = 'green';
+    // 2. CYCLE FLUCTUATION (positive offDelta = dropped = worse)
+    let fluctScore = 'green';
+    if (offDelta !== null) {
+      if      (offDelta >= 35) fluctScore = 'red';
+      else if (offDelta >= 15) fluctScore = 'orange';
+      else if (offDelta >= 10) fluctScore = 'yellow';
+      else if (offDelta > 0)   fluctScore = 'green';
+      else                     fluctScore = 'green'; // improved
+    }
 
-    // Flag significant drops
-    const drops = [];
-    for (let i = 0; i < sortedCycles.length - 1; i++) {
-      const curr = sortedCycles[i];
-      const prev = sortedCycles[i+1];
+    // 3. ON/OFF DIFFERENTIAL
+    let diffScore = 'green';
+    if (diff !== null) {
+      if      (diff <= 25) diffScore = 'red';
+      else if (diff <= 40) diffScore = 'orange';
+      else if (diff <= 55) diffScore = 'yellow';
+      else                 diffScore = 'green';
+    }
+
+    // Worst score wins
+    const rank = { red:0, orange:1, yellow:2, green:3, unknown:2 };
+    const scores = [thresholdScore, fluctScore, diffScore];
+    const worstRank = Math.min(...scores.map(s => rank[s] ?? 2));
+    const colorMap  = ['red','orange','yellow','green'];
+    let color = colorMap[worstRank];
+
+    // POD detection: very high differential and healthy off-read
+    const isPOD = diff !== null && diff > 150 && offRead !== null && offRead < -0.550;
+
+    // Improving reads flag
+    const improving = offDelta !== null && offDelta < -10;
+
+    // Bottom quartile placeholder — resolved after all points collected
+    points.push({
+      tp, address: data.address, offRead, onRead, diff, offDelta, onDelta,
+      bestOff, color, offLimit, failingThreshold, fluctScore, diffScore,
+      thresholdScore, drops: [], cycles: sortedCycles, isPOD, improving
+    });
+  }
+
+  // ── BOTTOM QUARTILE for points without a limit ─────────────────────────────
+  const hasLimit = points.filter(p => p.offLimit !== null);
+  const noLimit  = points.filter(p => p.offLimit === null && p.offRead !== null);
+  if (noLimit.length) {
+    const offs  = noLimit.map(p => p.offRead).sort((a,b) => b - a); // worst first
+    const cutoff = offs[Math.floor(offs.length * 0.25)]; // top 25% worst
+    for (const p of noLimit) {
+      if (p.offRead >= cutoff && p.color !== 'red' && p.color !== 'orange') {
+        p.color = 'orange';
+        p.bottomQuartile = true;
+      }
+    }
+  }
+
+  // ── DROP ALERTS ────────────────────────────────────────────────────────────
+  for (const p of points) {
+    for (let i = 0; i < p.cycles.length - 1; i++) {
+      const curr = p.cycles[i];
+      const prev = p.cycles[i+1];
       if (curr.off !== null && prev.off !== null) {
-        const d = Math.round((curr.off - prev.off) * 1000); // positive = dropped
-        if (d >= 35) drops.push({ date: curr.dateKey, prevDate: prev.dateKey, mvDrop: d, type: 'off' });
+        const d = Math.round((curr.off - prev.off) * 1000);
+        if (d >= 35) p.drops.push({ date: curr.dateKey, prevDate: prev.dateKey, mvDrop: d, type: 'off' });
       }
       if (curr.on !== null && prev.on !== null) {
         const d = Math.round((curr.on - prev.on) * 1000);
-        if (d >= 35) drops.push({ date: curr.dateKey, prevDate: prev.dateKey, mvDrop: d, type: 'on' });
+        if (d >= 35) p.drops.push({ date: curr.dateKey, prevDate: prev.dateKey, mvDrop: d, type: 'on' });
       }
     }
-
-    points.push({ tp, address: data.address, offRead, onRead, diff, offDelta, onDelta,
-                  bestOff, color, drops, cycles: sortedCycles, norm });
   }
 
-  // Sort by severity (color rank then worst off-read)
-  const rank = { red: 0, orange: 1, yellow: 2, green: 3 };
-  points.sort((a, b) => {
+  // Sort: worst first within each color group
+  const rank = { red:0, orange:1, yellow:2, green:3 };
+  points.sort((a,b) => {
     if (rank[a.color] !== rank[b.color]) return rank[a.color] - rank[b.color];
-    return b.offRead - a.offRead; // higher = worse
+    // Within same color: worst off-read first (most positive = worst)
+    return (b.offRead ?? -999) - (a.offRead ?? -999);
   });
 
-  return points;
+  return { points, rectRecords };
 }
+
+// ── COLOR REASON TEXT ─────────────────────────────────────────────────────────
+
 
 // ── RENDER ────────────────────────────────────────────────────────────────────
 function parseAndRender() {
@@ -464,7 +469,7 @@ function parseAndRender() {
   const records = parseData(rawData);
   if (!records.length) { setMsg('No valid readings found. Check file format.'); return; }
 
-  const points  = analyze(records);
+  const { points } = analyze(records);
   if (!points.length) { setMsg('Could not build on/off pairs from data.'); return; }
 
   // Summary counts
@@ -512,6 +517,8 @@ function parseAndRender() {
 function renderCard(p) {
   const c = p.color;
   const colorLabel = { red:'CRITICAL', orange:'HIGH', yellow:'MONITOR', green:'PASSING' };
+  const improvingIcon = p.improving ? ' ★' : '';
+  const podIcon       = p.isPOD     ? ' <span style="font-size:9px;background:rgba(48,200,96,0.2);color:var(--green);border:1px solid var(--green);padding:1px 5px;font-weight:bold">POD</span>' : '';
   const statusStyle = { red:`background:rgba(240,64,64,0.2);color:var(--red)`, orange:`background:rgba(240,128,32,0.2);color:var(--orange)`, yellow:`background:rgba(232,208,32,0.2);color:var(--yellow)`, green:`background:rgba(48,200,96,0.2);color:var(--green)` };
 
   // Off delta indicator
@@ -526,11 +533,12 @@ function renderCard(p) {
   const dropFlag  = p.drops.filter(d => d.type === 'off').length > 0
     ? `<span style="font-size:9px;background:rgba(240,64,64,0.2);color:var(--red);padding:1px 5px;margin-left:6px">DROP FLAGGED</span>` : '';
 
+
   return `
     <div class="alert-card ${c}" id="card-${p.tp}">
       <div class="alert-card-header" onclick="toggleCard('detail-${p.tp}', '${p.tp}')">
         <div class="ac-tp">TP ${p.tp}</div>
-        <div class="ac-addr">${p.address}${dropFlag}</div>
+        <div class="ac-addr">${p.address}${dropFlag}${podIcon}${improvingIcon}</div>
         <div class="ac-reads">
           <div class="ac-read-block">
             <div class="ac-read-label">Off-Read</div>
@@ -543,6 +551,10 @@ function renderCard(p) {
           <div class="ac-read-block">
             <div class="ac-read-label">ON/OFF Gap</div>
             <div class="ac-diff-val" style="color:${diffColor}">${p.diff !== null ? p.diff+'mV' : '—'}</div>
+          </div>
+          <div class="ac-read-block">
+            <div class="ac-read-label">Limit</div>
+            <div class="ac-read-val" style="color:${p.failingThreshold ? 'var(--red)' : 'var(--text-muted)'}">${p.offLimit !== null ? (p.offLimit*1000).toFixed(0)+'mV' : '—'}</div>
           </div>
           <div class="ac-read-block">
             <div class="ac-read-label">vs Prior</div>
@@ -559,17 +571,18 @@ function renderCard(p) {
 }
 
 function renderDetail(p) {
-  const explanation = buildExplanation(p);
-  const cycleRows   = buildCycleHistory(p);
+  const cycleRows = buildCycleHistory(p);
 
   return `
-    <div class="explanation ${p.color}">${explanation}</div>
+    <div class="explanation ${p.color}">${buildExplanation(p)}</div>
     <div class="detail-grid">
       <div class="detail-section">
         <h4>Latest Readings</h4>
         <div class="detail-row"><span class="dr-label">Off-Read</span><span class="dr-val">${p.offRead !== null ? p.offRead.toFixed(3)+'V' : '—'}</span></div>
         <div class="detail-row"><span class="dr-label">On-Read</span><span class="dr-val">${p.onRead !== null ? p.onRead.toFixed(3)+'V' : '—'}</span></div>
         <div class="detail-row"><span class="dr-label">ON/OFF Gap</span><span class="dr-val">${p.diff !== null ? p.diff+'mV' : '—'}</span></div>
+        <div class="detail-row"><span class="dr-label">Lower Limit (Threshold)</span><span class="dr-val" style="color:${p.failingThreshold ? 'var(--red)' : 'var(--green)'}">${p.offLimit !== null ? p.offLimit.toFixed(3)+'V' : 'Not available'}</span></div>
+        <div class="detail-row"><span class="dr-label">Pass/Fail</span><span class="dr-val" style="color:${p.failingThreshold ? 'var(--red)' : 'var(--green)'}">${p.failingThreshold ? '✗ FAILING' : p.offLimit !== null ? '✓ PASSING' : 'No limit data'}</span></div>
         <div class="detail-row"><span class="dr-label">Best Historical Off</span><span class="dr-val">${p.bestOff !== null ? p.bestOff.toFixed(3)+'V' : '—'}</span></div>
         <div class="detail-row"><span class="dr-label">Off vs Prior Cycle</span><span class="dr-val">${p.offDelta !== null ? (p.offDelta > 0 ? '▼ dropped ' : '▲ improved ')+Math.abs(p.offDelta)+'mV' : 'No prior cycle'}</span></div>
         <div class="detail-row"><span class="dr-label">On vs Prior Cycle</span><span class="dr-val">${p.onDelta !== null ? (p.onDelta > 0 ? '▼ dropped ' : '▲ improved ')+Math.abs(p.onDelta)+'mV' : 'No prior cycle'}</span></div>
@@ -608,6 +621,7 @@ function buildExplanation(p) {
   if (p.color === 'yellow') {
     return `<b style="color:var(--yellow)">△ MONITOR:</b> Off-read of ${off} is marginal — protection is present but below the station average. The ON/OFF gap of ${diff} is ${p.diff >= 60 && p.diff <= 100 ? 'within acceptable range' : 'acceptable'}. No immediate action required but monitor closely across future survey cycles for any downward trend.${dropNote}`;
   }
+  if (p.isPOD) return `<b style="color:var(--green)">✓ POINT OF DRAINAGE (POD):</b> This test point is in close proximity to the rectifier. Off-read of ${off} and ON/OFF gap of ${diff} are consistent with expected POD behavior — high polarization near the current source is normal and healthy. No concern at this time.`;
   return `<b style="color:var(--green)">✓ PASSING:</b> Off-read of ${off} indicates good cathodic protection at this location. The ON/OFF gap of ${diff} is within normal range. No concern at this time.${dropNote}`;
 }
 
