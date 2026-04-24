@@ -283,7 +283,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 const CIRCLE_R    = 30;
-const STORAGE_KEY = 'cp409_v2_pins';
+const STORAGE_KEY  = 'cp409_v2_pins';
+const STORAGE_KEY_LEGACY = 'cp409_pins'; // fallback for older saved data
 
 let mode = 'place', pins = [], mvData = [];
 let pdfDoc = null, pdfPage = null, scale = 1.0, pendingXY = null;
@@ -294,7 +295,19 @@ const mapCtx        = mapCanvas.getContext('2d');
 const overlayCtx    = overlayCanvas.getContext('2d');
 
 function savePins() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(pins)); } catch(e) {} }
-function loadPins() { try { const d = localStorage.getItem(STORAGE_KEY); if (d) pins = JSON.parse(d); } catch(e) { pins = []; } }
+function loadPins() {
+  try {
+    // Try current key first
+    let d = localStorage.getItem(STORAGE_KEY);
+    // Fall back to legacy key if nothing found
+    if (!d) d = localStorage.getItem(STORAGE_KEY_LEGACY);
+    if (d) {
+      pins = JSON.parse(d);
+      // Migrate legacy pins to new key
+      savePins();
+    }
+  } catch(e) { pins = []; }
+}
 
 function setMode(m) {
   mode = m;
