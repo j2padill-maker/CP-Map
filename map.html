@@ -281,6 +281,24 @@
   </div>
 </div>
 
+<!-- EDIT PIN MODAL -->
+<div class="modal-bg" id="edit-modal">
+  <div class="modal">
+    <h3>✏️ Edit Test Point</h3>
+    <label>Test Point #</label>
+    <input type="text" id="edit-tp-num" placeholder="e.g. TP 1  or  TP 12">
+    <label>Address</label>
+    <input type="text" id="edit-tp-addr" placeholder="e.g. 1035 Reef Dr">
+    <p style="font-size:10px;color:var(--text-muted);margin-bottom:12px">
+      To reposition this pin on the map, save the edit then delete and re-place it.
+    </p>
+    <div class="modal-btns">
+      <button class="btn btn-primary" onclick="saveEdit()">Save Changes</button>
+      <button class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -370,8 +388,9 @@ function savePin() {
 function closeModal() { document.getElementById('modal').classList.remove('open'); pendingXY = null; }
 document.getElementById('modal').addEventListener('click', e => { if (e.target === document.getElementById('modal')) closeModal(); });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeModal();
+  if (e.key === 'Escape') { closeModal(); closeEditModal(); }
   if (e.key === 'Enter' && document.getElementById('modal').classList.contains('open')) savePin();
+  if (e.key === 'Enter' && document.getElementById('edit-modal').classList.contains('open')) saveEdit();
 });
 
 async function loadData(input) {
@@ -543,6 +562,7 @@ function renderSidebar() {
           ? `Off: <b>${pin.offRead.toFixed(3)}V</b> | On: ${pin.onRead.toFixed(3)}V | <span style="color:${dc}">Δ${pin.diff}mV</span>`
           : '<span style="color:var(--text-muted)">No data matched</span>'}</div>
       </div>
+      <button class="tp-delete" onclick="openEditModal(${pin.id},event)" title="Edit" style="color:var(--teal-dim);font-size:13px">✏</button>
       <button class="tp-delete" onclick="deletePin(${pin.id},event)" title="Remove">×</button>`;
     div.addEventListener('click', () => flashPin(pin));
     list.appendChild(div);
@@ -761,6 +781,45 @@ Click Cancel to MERGE (add imported pins to existing).`
     input.value = '';
   };
   reader.readAsText(file);
+}
+
+// ── EDIT PIN ──────────────────────────────────────────────────────────────────
+let editingPinId = null;
+
+function openEditModal(id, e) {
+  e.stopPropagation();
+  const pin = pins.find(p => p.id === id);
+  if (!pin) return;
+  editingPinId = id;
+  document.getElementById('edit-tp-num').value  = pin.tpNum;
+  document.getElementById('edit-tp-addr').value = pin.address;
+  document.getElementById('edit-modal').classList.add('open');
+  setTimeout(() => document.getElementById('edit-tp-num').focus(), 60);
+}
+
+function saveEdit() {
+  const tpNum = document.getElementById('edit-tp-num').value.trim();
+  const addr  = document.getElementById('edit-tp-addr').value.trim();
+  if (!tpNum || !addr) { alert('Please fill in both fields.'); return; }
+  const pin = pins.find(p => p.id === editingPinId);
+  if (!pin) return;
+  pin.tpNum   = tpNum;
+  pin.address = addr;
+  // Reset data match so it gets re-matched on next Apply
+  pin.color   = 'none';
+  pin.offRead = null;
+  pin.onRead  = null;
+  pin.diff    = null;
+  savePins();
+  closeEditModal();
+  drawOverlay();
+  renderSidebar();
+  setMsg('Pin updated: ' + tpNum + ' @ ' + addr + ' — click Apply Data to recolor.');
+}
+
+function closeEditModal() {
+  document.getElementById('edit-modal').classList.remove('open');
+  editingPinId = null;
 }
 
 loadPins(); renderSidebar(); drawOverlay(); setMode('place');
