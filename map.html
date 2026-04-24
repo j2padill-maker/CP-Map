@@ -396,28 +396,24 @@ async function loadPDF(input) {
 async function renderPDF() {
   if (!pdfPage) return;
 
-  // Use device pixel ratio for crisp rendering on all screens
-  const dpr = window.devicePixelRatio || 1;
-  const vp  = pdfPage.getViewport({ scale: scale * dpr });
+  // Render at 2x resolution for crisp text and lines at all zoom levels
+  const quality = 2;
+  const vpHiRes = pdfPage.getViewport({ scale: scale * quality });
+  const vpLogic = pdfPage.getViewport({ scale });
 
-  // Set canvas physical size to match high-DPI
-  mapCanvas.width     = vp.width;
-  mapCanvas.height    = vp.height;
-  overlayCanvas.width  = vp.width;
-  overlayCanvas.height = vp.height;
+  // Physical canvas size = high-res for sharp rendering
+  mapCanvas.width      = vpHiRes.width;
+  mapCanvas.height     = vpHiRes.height;
+  overlayCanvas.width  = vpHiRes.width;
+  overlayCanvas.height = vpHiRes.height;
 
-  // Set CSS display size to the logical size
-  const logicalW = pdfPage.getViewport({ scale }).width;
-  const logicalH = pdfPage.getViewport({ scale }).height;
-  mapCanvas.style.width      = logicalW + 'px';
-  mapCanvas.style.height     = logicalH + 'px';
-  overlayCanvas.style.width  = logicalW + 'px';
-  overlayCanvas.style.height = logicalH + 'px';
+  // CSS display size = logical size so layout is correct
+  mapCanvas.style.width      = vpLogic.width  + 'px';
+  mapCanvas.style.height     = vpLogic.height + 'px';
+  overlayCanvas.style.width  = vpLogic.width  + 'px';
+  overlayCanvas.style.height = vpLogic.height + 'px';
 
-  // Scale context to account for DPR
-  mapCtx.setTransform(1, 0, 0, 1, 0, 0);
-
-  await pdfPage.render({ canvasContext: mapCtx, viewport: vp }).promise;
+  await pdfPage.render({ canvasContext: mapCtx, viewport: vpHiRes }).promise;
   drawOverlay();
 }
 
@@ -567,9 +563,10 @@ const COLORS = {
 };
 
 function drawOverlay() {
-  const dpr = window.devicePixelRatio || 1;
+  const quality = 2;
   overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-  overlayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // Scale context by quality so coordinates match logical pixel space
+  overlayCtx.setTransform(quality, 0, 0, quality, 0, 0);
   const r = CIRCLE_R * scale;
   for (const pin of pins) {
     const sx = pin.x * scale, sy = pin.y * scale;
@@ -753,9 +750,8 @@ function pinAtXY(cx, cy) {
 const tooltip = document.getElementById('map-tooltip');
 overlayCanvas.addEventListener('mousemove', (e) => {
   const rect = overlayCanvas.getBoundingClientRect();
-  const dpr  = window.devicePixelRatio || 1;
-  const cx   = (e.clientX - rect.left);
-  const cy   = (e.clientY - rect.top);
+  const cx   = e.clientX - rect.left;
+  const cy   = e.clientY - rect.top;
   const pin  = pinAtXY(cx, cy);
   if (pin) {
     overlayCanvas.style.cursor = 'pointer';
@@ -1031,7 +1027,6 @@ function closeEditModal() {
   editingPinId = null;
 }
 
-window.addEventListener('resize', () => { if (pdfPage) fitPage(); });
 loadPins(); loadRectifier(); renderSidebar(); drawOverlay(); updateRectPanel(); setMode('place');
 </script>
 </body>
