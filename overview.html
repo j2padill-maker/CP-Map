@@ -161,6 +161,9 @@
     </div>
     <button class="parse-btn" onclick="parseAndRender()">▶ Analyze Data</button>
     <span class="upload-msg" id="upload-msg">Upload a survey spreadsheet to begin analysis</span>
+  <div id="no-limits-notice" style="display:none;font-size:10px;color:var(--yellow);background:rgba(232,208,32,0.1);border:1px solid var(--yellow);padding:4px 10px;letter-spacing:1px">
+    ⚠ No lower limits loaded — upload full survey file (Book2) first to enable pass/fail analysis
+  </div>
   </div>
 
   <!-- SUMMARY CARDS -->
@@ -210,42 +213,51 @@ function handleFile(input) {
 }
 
 // ── COLUMN DETECTION ──────────────────────────────────────────────────────────
+// Handles both Book1 format (7 cols: Area,Point,Location,City,Read,Read By,Read Date)
+// and Book2 full format (32 cols with Lower Limit, Read Type etc.)
 function detectColumns(rows) {
   const cols = {
     station:-1, point:-1, address:-1, city:-1,
     read:-1, date:-1, readBy:-1, readType:-1,
     lowerLimit:-1, upperLimit:-1
   };
-  const sample = rows.slice(0, Math.min(20, rows.length));
 
-  // Use header row if present
   const hdr = rows[0] || [];
   hdr.forEach((h, i) => {
     const s = String(h).toLowerCase().trim();
-    if (s === 'area' || s.includes('sta '))               cols.station    = i;
-    if (s === 'point')                                     cols.point      = i;
-    if (s === 'location')                                  cols.address    = i;
-    if (s === 'city')                                      cols.city       = i;
-    if (s === 'read' && cols.read === -1)                  cols.read       = i;
-    if (s === 'read date' || s === 'read_date')            cols.date       = i;
-    if (s === 'read by' || s === 'read_by')                cols.readBy     = i;
+    // Station/Area
+    if (s === 'area' || s === 'station')                            cols.station    = i;
+    // Point
+    if (s === 'point')                                              cols.point      = i;
+    // Address/Location
+    if (s === 'location' || s === 'address')                        cols.address    = i;
+    // City
+    if (s === 'city')                                               cols.city       = i;
+    // Read value
+    if (s === 'read')                                               cols.read       = i;
+    // Date
+    if (s === 'read date' || s === 'read_date' || s === 'date')     cols.date       = i;
+    // Read by
+    if (s === 'read by' || s === 'read_by')                         cols.readBy     = i;
+    // Read type (Book2 only)
     if (s.includes('measurement point characteristic') ||
-        s.includes('present read') || s === 'read type')  cols.readType   = i;
-    if (s === 'lower limit' || s === 'lower_limit')        cols.lowerLimit = i;
-    if (s === 'upper limit' || s === 'upper_limit')        cols.upperLimit = i;
+        s.includes('present read') || s === 'read type')            cols.readType   = i;
+    // Lower/Upper limit (Book2 only)
+    if (s === 'lower limit' || s === 'lower_limit' ||
+        s === 'current point lower limit')                          cols.lowerLimit = i;
+    if (s === 'upper limit' || s === 'upper_limit' ||
+        s === 'current point upper limit')                          cols.upperLimit = i;
   });
 
-  // Fallbacks for Book2 format
-  if (cols.station    === -1) cols.station    = 2;
-  if (cols.point      === -1) cols.point      = 3;
-  if (cols.address    === -1) cols.address    = 6;
-  if (cols.city       === -1) cols.city       = 7;
-  if (cols.read       === -1) cols.read       = 16;
-  if (cols.readBy     === -1) cols.readBy     = 18;
-  if (cols.date       === -1) cols.date       = 19;
-  if (cols.lowerLimit === -1) cols.lowerLimit = 20;
-  if (cols.upperLimit === -1) cols.upperLimit = 21;
-  if (cols.readType   === -1) cols.readType   = 24;
+  // Fallback for Book2 positional format if headers not found
+  if (cols.station  === -1) cols.station  = 2;
+  if (cols.point    === -1) cols.point    = 3;
+  if (cols.address  === -1) cols.address  = 6;
+  if (cols.city     === -1) cols.city     = 7;
+  if (cols.read     === -1) cols.read     = 16;
+  if (cols.readBy   === -1) cols.readBy   = 18;
+  if (cols.date     === -1) cols.date     = 19;
+  // lowerLimit and readType stay -1 if not found (Book1 format)
 
   return cols;
 }
@@ -254,21 +266,90 @@ function normTP(s) {
   return String(s).replace(/TP\s*/i,'').replace(/\.000$/,'').replace(/\.0+$/,'').trim();
 }
 
+// ── LIMIT STORAGE ─────────────────────────────────────────────────────────────
+// Saves lower limits keyed by station so they persist across sessions
+// and are available when Book1 (no limit column) is uploaded
+let savedLimits = {}; // { tp: lowerLimit } for current station
+let currentStation = '';
+
+function limitsKey(station) {
+  return 'cp_limits_' + station.replace(/\s+/g,'_').toUpperCase();
+}
+
+function saveLimits(station, limits) {
+  try {
+    localStorage.setItem(limitsKey(station), JSON.stringify(limits));
+    savedLimits = limits;
+    currentStation = station;
+  } catch(e) {}
+}
+
+function loadLimits(station) {
+  try {
+    const d = localStorage.getItem(limitsKey(station));
+    if (d) { savedLimits = JSON.parse(d); currentStation = station; }
+    else savedLimits = {};
+  } catch(e) { savedLimits = {}; }
+}
+
+function getLimitForTP(tp) {
+  return savedLimits[tp] ?? null;
+}
+
+
 // ── PARSE DATA ────────────────────────────────────────────────────────────────
 // Uses Present Read IO = off-read, Present Read ON = on-read
 // Lower Limit column = passing threshold directly from system
+// Falls back to stored limits from previous Book2 upload if not present
 function parseData(rows) {
   const cols = detectColumns(rows);
   const records = [];
-  // Skip header row
   const startRow = 1;
+
+  // First pass: detect station and extract any limits present in this file
+  let detectedStation = '';
+  const extractedLimits = {}; // tp -> lowerLimit from this file
+  const hasLimitCol = cols.lowerLimit !== -1;
 
   for (let i = startRow; i < rows.length; i++) {
     const row   = rows[i];
     const point = String(row[cols.point] || '').trim();
-    if (!point || !/^(tp|r)\s*\d/i.test(point)) continue;
+    if (!point || !/^tp\s*\d/i.test(point)) continue;
+    const tp  = normTP(point);
+    const sta = String(row[cols.station] || '').trim();
+    if (sta && !detectedStation) detectedStation = sta;
 
-    // Skip rectifier amp/volt rows for TP analysis (keep for rectifier panel)
+    if (hasLimitCol) {
+      // Use off-read lower limit (IO row) — identified by read type
+      const rt = cols.readType !== -1 ? String(row[cols.readType] || '').toUpperCase() : '';
+      const isOffRow = rt.includes('IO') || rt.includes(' I ');
+      // Also try Current Point Lower Limit column if present
+      const llCol = cols.lowerLimit;
+      const llStr = String(row[llCol] || '').replace(/[Vv\s]/g,'').trim();
+      const ll    = parseFloat(llStr);
+      if (!isNaN(ll) && (isOffRow || !extractedLimits[tp])) {
+        extractedLimits[tp] = ll;
+      }
+    }
+  }
+
+  // Save extracted limits to localStorage if this file had them
+  if (hasLimitCol && Object.keys(extractedLimits).length > 0 && detectedStation) {
+    saveLimits(detectedStation, extractedLimits);
+    setMsg('Limits saved for ' + detectedStation + ' — ' + Object.keys(extractedLimits).length + ' test points');
+  } else if (detectedStation) {
+    // Load any previously saved limits for this station
+    loadLimits(detectedStation);
+    if (Object.keys(savedLimits).length > 0) {
+      setMsg('Using saved limits for ' + detectedStation);
+    }
+  }
+
+  // Second pass: build records
+  for (let i = startRow; i < rows.length; i++) {
+    const row   = rows[i];
+    const point = String(row[cols.point] || '').trim();
+    if (!point || !/^(tp|r)\s*\d/i.test(point)) continue;
     const isRect = /^r\s*\d/i.test(point);
 
     const readStr = String(row[cols.read] || '').replace(/[Vv\s]/g,'').trim();
@@ -281,19 +362,27 @@ function parseData(rows) {
     else if (dv) { const d = new Date(dv); if (!isNaN(d)) date = d; }
     if (!date) continue;
 
-    // Read type from Measurement Point Characteristic Name column
-    const rt = String(row[cols.readType] || '').toUpperCase();
+    // Read type
     let readType = 'unknown';
-    if (rt.includes('IO') || rt.includes(' I ')) readType = 'off';
-    else if (rt.includes('ON'))                  readType = 'on';
+    if (cols.readType !== -1) {
+      const rt = String(row[cols.readType] || '').toUpperCase();
+      if (rt.includes('IO') || rt.includes(' I ')) readType = 'off';
+      else if (rt.includes('ON'))                  readType = 'on';
+    }
 
-    // Lower limit = passing threshold
-    const llStr = String(row[cols.lowerLimit] || '').replace(/[Vv\s]/g,'').trim();
-    const lowerLimit = parseFloat(llStr) || null;
+    const tp = normTP(point);
+
+    // Lower limit: from this file, or from saved limits
+    let lowerLimit = null;
+    if (hasLimitCol && extractedLimits[tp] !== undefined) {
+      lowerLimit = extractedLimits[tp];
+    } else {
+      lowerLimit = getLimitForTP(tp);
+    }
 
     records.push({
       station:    String(row[cols.station] || '').trim(),
-      point:      normTP(point),
+      point:      tp,
       address:    String(row[cols.address] || '').trim(),
       city:       String(row[cols.city]    || '').trim(),
       read, readType, date, lowerLimit, isRect,
@@ -326,10 +415,17 @@ function analyze(records) {
       cyc.off = r.read;
       if (r.lowerLimit !== null) cyc.offLimit = r.lowerLimit;
     } else {
-      // Fallback: numeric rule — higher (less negative) = off
-      if (cyc.off === null && cyc.on === null) cyc.off = r.read;
-      else if (r.read > (cyc.off ?? -999))     cyc.off = r.read;
-      else                                      cyc.on  = r.read;
+      // Book1 fallback: numeric rule
+      // Higher value (less negative) = off-read (rectifier off)
+      // Lower value  (more negative) = on-read  (rectifier on)
+      if (cyc.reads === undefined) cyc.reads = [];
+      cyc.reads.push(r.read);
+    }
+    // Resolve numeric pairs after collecting both reads
+    if (cyc.reads && cyc.reads.length >= 2) {
+      cyc.off = Math.max(...cyc.reads);
+      cyc.on  = Math.min(...cyc.reads);
+      delete cyc.reads;
     }
   }
 
@@ -549,6 +645,9 @@ function parseAndRender() {
   const totalDrops = points.reduce((sum, p) => sum + p.drops.filter(d => d.mvDrop >= 35).length, 0);
   document.getElementById('s-drops').textContent   = totalDrops;
   document.getElementById('summary-row').style.display = 'flex';
+  // Show notice if no limits available
+  const hasLimits = points.some(p => p.offLimit !== null);
+  document.getElementById('no-limits-notice').style.display = hasLimits ? 'none' : 'block';
 
   // Render alert groups
   const groups = [
