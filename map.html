@@ -164,6 +164,9 @@
   <div class="nav-map-btns">
     <button class="mode-btn active" id="btn-place" onclick="setMode('place')">📍 Place Pins</button>
     <button class="mode-btn" id="btn-view" onclick="setMode('view')">👁 View Only</button>
+    <button class="mode-btn" onclick="exportPins()" title="Save pins to file">💾 Export Pins</button>
+    <button class="mode-btn" onclick="document.getElementById('import-input').click()" title="Load pins from file">📂 Import Pins</button>
+    <input type="file" id="import-input" accept=".json" style="display:none" onchange="importPins(this)">
     <button class="mode-btn danger" onclick="clearAll()">✕ Clear All</button>
   </div>
 </nav>
@@ -698,6 +701,67 @@ function toggleLegend() {
 
 // Show legend toggle once PDF loads
 const _origLoadPDF = loadPDF;
+
+// ── EXPORT PINS ───────────────────────────────────────────────────────────────
+function exportPins() {
+  if (!pins.length) { setMsg('No pins to export.'); return; }
+  const payload = {
+    version: 2,
+    station: '409',
+    exported: new Date().toISOString(),
+    pins: pins
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'cp409_pins_' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  setMsg('Pins exported — ' + pins.length + ' test points saved to file.');
+}
+
+// ── IMPORT PINS ───────────────────────────────────────────────────────────────
+function importPins(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const payload = JSON.parse(e.target.result);
+      // Accept both raw array and wrapped object formats
+      const imported = Array.isArray(payload) ? payload : payload.pins;
+      if (!imported || !imported.length) { setMsg('No pins found in file.'); return; }
+      // Merge or replace — if pins already exist ask user
+      if (pins.length > 0) {
+        const choice = confirm(
+          `You have ${pins.length} existing pin(s).
+
+Click OK to REPLACE all pins with the imported set.
+Click Cancel to MERGE (add imported pins to existing).`
+        );
+        if (choice) {
+          pins = imported;
+        } else {
+          // Merge: avoid duplicates by id
+          const existingIds = new Set(pins.map(p => p.id));
+          const newPins = imported.filter(p => !existingIds.has(p.id));
+          pins = [...pins, ...newPins];
+        }
+      } else {
+        pins = imported;
+      }
+      savePins();
+      drawOverlay();
+      renderSidebar();
+      setMsg('Imported ' + pins.length + ' pins from ' + file.name);
+    } catch(err) {
+      setMsg('Error reading pin file: ' + err.message);
+    }
+    // Reset input so same file can be re-imported if needed
+    input.value = '';
+  };
+  reader.readAsText(file);
+}
 
 loadPins(); renderSidebar(); drawOverlay(); setMode('place');
 </script>
