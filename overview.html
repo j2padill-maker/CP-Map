@@ -459,7 +459,72 @@ function analyze(records) {
 }
 
 // ── COLOR REASON TEXT ─────────────────────────────────────────────────────────
+function buildExplanation(p) {
+  const offStr  = p.offRead  !== null ? p.offRead.toFixed(3)  + 'V (' + (p.offRead*1000).toFixed(0)  + 'mV)' : '—';
+  const limStr  = p.offLimit !== null ? p.offLimit.toFixed(3) + 'V (' + (p.offLimit*1000).toFixed(0) + 'mV)' : 'not available';
+  const diffStr = p.diff     !== null ? p.diff + 'mV' : '—';
+  const onStr   = p.onRead   !== null ? p.onRead.toFixed(3)   + 'V (' + (p.onRead*1000).toFixed(0)   + 'mV)' : '—';
 
+  const dropNote = p.drops.filter(d => d.type === 'off' && d.mvDrop >= 35)
+    .map(d => `A drop of ${d.mvDrop}mV was recorded on ${d.date}.`).join(' ');
+
+  // POD override
+  if (p.isPOD) {
+    return `<b style="color:var(--green)">✓ POINT OF DRAINAGE (POD):</b> This test point is in close proximity to the rectifier. Off-read of ${offStr} and ON/OFF gap of ${diffStr} are consistent with expected POD behavior — high polarization near the current source is normal and healthy. ${dropNote}`;
+  }
+
+  const parts = [];
+
+  // ── 1. THRESHOLD ──────────────────────────────────────────────────────────
+  if (p.offLimit !== null) {
+    if (p.failingThreshold) {
+      parts.push(`<b style="color:var(--red)">⚠ FAILING THRESHOLD:</b> Off-read of ${offStr} does not meet the lower limit of ${limStr}. The pipe at this location is not receiving adequate cathodic protection and is considered a failing read.`);
+    } else {
+      parts.push(`<b style="color:var(--green)">✓ THRESHOLD PASSING:</b> Off-read of ${offStr} meets the lower limit of ${limStr}.`);
+    }
+  } else if (p.bottomQuartile) {
+    parts.push(`<b style="color:var(--orange)">△ BOTTOM QUARTILE (No Limit Available):</b> Off-read of ${offStr} falls in the bottom 25% of station readings. No lower limit is available for this test point so pass/fail cannot be determined. Flagged for monitoring — no meaningful drop observed from prior survey.`);
+  }
+
+  // ── 2. CYCLE FLUCTUATION ──────────────────────────────────────────────────
+  if (p.offDelta !== null && p.offDelta !== 0) {
+    if (p.offDelta >= 35) {
+      parts.push(`<b style="color:var(--red)">⚠ SIGNIFICANT DROP:</b> Off-read dropped ${p.offDelta}mV since the last survey cycle (now ${offStr}). A drop of 35mV or more is a red flag indicating rapidly deteriorating protection or a developing fault nearby.`);
+    } else if (p.offDelta >= 15) {
+      parts.push(`<b style="color:var(--orange)">⚠ MODERATE DROP:</b> Off-read dropped ${p.offDelta}mV since the last survey cycle. A drop of 15-35mV warrants monitoring — investigate if trend continues.`);
+    } else if (p.offDelta >= 10) {
+      parts.push(`<b style="color:var(--yellow)">△ MINOR DROP:</b> Off-read dropped ${p.offDelta}mV since the last survey cycle. Change is marginal (10-15mV) — watch for continued downward trend.`);
+    } else if (p.offDelta > 0) {
+      parts.push(`<b style="color:var(--green)">→ STABLE:</b> Off-read changed less than 10mV since last survey. No meaningful fluctuation detected.`);
+    } else if (p.improving) {
+      parts.push(`<b style="color:var(--green)">★ IMPROVING:</b> Off-read improved ${Math.abs(p.offDelta)}mV since last survey — protection is trending in the right direction.`);
+    }
+  } else if (p.offDelta === 0) {
+    parts.push(`<b style="color:var(--green)">→ STABLE:</b> No change detected from prior survey cycle.`);
+  } else {
+    parts.push(`<b style="color:var(--text-muted)">— CYCLE COMPARISON:</b> No prior survey cycle available for comparison.`);
+  }
+
+  // ── 3. ON/OFF DIFFERENTIAL ────────────────────────────────────────────────
+  if (p.diff !== null) {
+    if (p.diff <= 25) {
+      parts.push(`<b style="color:var(--red)">⚠ CRITICAL DIFFERENTIAL:</b> ON/OFF gap of ${diffStr} is critically low (≤25mV). The rectifier current is barely polarizing the pipe at this location. A short circuit nearby is likely drawing current away — this is a strong indicator of a fault.`);
+    } else if (p.diff <= 40) {
+      parts.push(`<b style="color:var(--orange)">⚠ LOW DIFFERENTIAL:</b> ON/OFF gap of ${diffStr} is low (26-40mV). Insufficient polarization at this location. Investigate current flow and nearby bonds.`);
+    } else if (p.diff <= 55) {
+      parts.push(`<b style="color:var(--yellow)">△ MARGINAL DIFFERENTIAL:</b> ON/OFF gap of ${diffStr} is marginal (41-55mV). Acceptable but below optimal — monitor in future surveys.`);
+    } else {
+      parts.push(`<b style="color:var(--green)">✓ HEALTHY DIFFERENTIAL:</b> ON/OFF gap of ${diffStr} is above 55mV — indicating effective polarization at this location.`);
+    }
+  }
+
+  // ── DROP HISTORY NOTE ─────────────────────────────────────────────────────
+  if (dropNote) {
+    parts.push(`<b style="color:var(--yellow)">📋 HISTORICAL NOTE:</b> ${dropNote}`);
+  }
+
+  return parts.join('<br><br>');
+}
 
 // ── RENDER ────────────────────────────────────────────────────────────────────
 function parseAndRender() {
