@@ -144,6 +144,29 @@
   .alert-item .ai-addr { color: var(--text-dim); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .alert-item .ai-reads { color: #faa; font-size: 9px; white-space: nowrap; }
 
+
+  /* RECTIFIER MARKER */
+  .rect-pulse { position: absolute; pointer-events: none; }
+
+  /* MODE BUTTON RECTIFIER */
+  .mode-btn.rect-mode { border-color: #f0c030; color: #f0c030; }
+  .mode-btn.rect-mode:hover { background: rgba(240,192,48,0.2); }
+  .mode-btn.rect-mode.active { background: rgba(240,192,48,0.25); border-color: #f0c030; color: #fff; }
+
+  /* POD BADGE */
+  .tp-pod-badge { display: inline-block; font-size: 8px; background: rgba(48,200,96,0.25); color: var(--green-solid); border: 1px solid var(--green-solid); padding: 1px 5px; margin-left: 5px; letter-spacing: 1px; font-weight: bold; }
+  .tp-pod-suspected { background: rgba(232,208,32,0.2); color: var(--yellow-solid); border-color: var(--yellow-solid); }
+
+  /* RECTIFIER SIDEBAR PANEL */
+  .rect-panel { border-bottom: 1px solid var(--border); padding: 10px 12px; background: rgba(240,192,48,0.06); }
+  .rect-panel h2 { font-size: 10px; letter-spacing: 2px; color: #f0c030; text-transform: uppercase; margin-bottom: 8px; font-weight: bold; }
+  .rect-info { font-size: 10px; color: var(--text-dim); line-height: 1.7; }
+  .rect-info .rect-addr { color: var(--text); font-weight: bold; font-size: 11px; margin-bottom: 4px; }
+  .rect-info .rect-offline { color: var(--red-solid); font-weight: bold; }
+  .rect-info .rect-reading { display: flex; justify-content: space-between; padding: 2px 0; }
+  .rect-info .rect-label { color: var(--text-muted); }
+  .rect-info .rect-val { font-weight: bold; }
+
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: var(--surface); }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
@@ -163,6 +186,7 @@
   </div>
   <div class="nav-map-btns">
     <button class="mode-btn active" id="btn-place" onclick="setMode('place')">📍 Place Pins</button>
+    <button class="mode-btn rect-mode" id="btn-rect" onclick="setMode('rect')" title="Place rectifier marker">⚡ Rectifier</button>
     <button class="mode-btn" id="btn-view" onclick="setMode('view')">👁 View Only</button>
     <button class="mode-btn" onclick="exportPins()" title="Save pins to file">💾 Export Pins</button>
     <button class="mode-btn" onclick="document.getElementById('import-input').click()" title="Load pins from file">📂 Import Pins</button>
@@ -208,6 +232,13 @@
       </div>
     </div>
 
+    <div class="rect-panel" id="rect-panel" style="display:none">
+      <h2>⚡ Rectifier</h2>
+      <div class="rect-info" id="rect-info">
+        <div class="rect-addr" id="rect-addr">Not placed</div>
+        <div id="rect-readings"></div>
+      </div>
+    </div>
     <div class="tp-header">Test Points &nbsp;<span id="tp-count">0</span></div>
     <div class="tp-list" id="tp-list">
       <div style="padding:12px;font-size:10px;color:var(--text-muted);text-align:center">No pins placed yet</div>
@@ -308,6 +339,8 @@ const STORAGE_KEY  = 'cp409_v2_pins';
 const STORAGE_KEY_LEGACY = 'cp409_pins'; // fallback for older saved data
 
 let mode = 'place', pins = [], mvData = [];
+let rectifier = null; // {x, y, address, volt, amp}
+const RECT_KEY = 'cp409_rectifier';
 let pdfDoc = null, pdfPage = null, scale = 1.0, pendingXY = null;
 
 const mapCanvas     = document.getElementById('map-canvas');
@@ -318,24 +351,30 @@ const overlayCtx    = overlayCanvas.getContext('2d');
 function savePins() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(pins)); } catch(e) {} }
 function loadPins() {
   try {
-    // Try current key first
     let d = localStorage.getItem(STORAGE_KEY);
-    // Fall back to legacy key if nothing found
     if (!d) d = localStorage.getItem(STORAGE_KEY_LEGACY);
-    if (d) {
-      pins = JSON.parse(d);
-      // Migrate legacy pins to new key
-      savePins();
-    }
+    if (d) { pins = JSON.parse(d); savePins(); }
   } catch(e) { pins = []; }
+}
+
+function saveRectifier() {
+  try { localStorage.setItem(RECT_KEY, JSON.stringify(rectifier)); } catch(e) {}
+}
+function loadRectifier() {
+  try {
+    const d = localStorage.getItem(RECT_KEY);
+    if (d) rectifier = JSON.parse(d);
+  } catch(e) { rectifier = null; }
 }
 
 function setMode(m) {
   mode = m;
   document.getElementById('btn-place').classList.toggle('active', m === 'place');
   document.getElementById('btn-view').classList.toggle('active',  m === 'view');
-  mapCanvas.style.cursor = m === 'place' ? 'crosshair' : 'default';
-  document.getElementById('status-mode').textContent = m === 'place' ? 'PLACE PINS' : 'VIEW ONLY';
+  document.getElementById('btn-rect').classList.toggle('active',  m === 'rect');
+  mapCanvas.style.cursor = (m === 'place' || m === 'rect') ? 'crosshair' : 'default';
+  document.getElementById('status-mode').textContent =
+    m === 'place' ? 'PLACE PINS' : m === 'rect' ? 'PLACE RECTIFIER' : 'VIEW ONLY';
 }
 
 async function loadPDF(input) {
@@ -479,7 +518,24 @@ function applyDataToPoints() {
     } else { pin.color = 'none'; }
   }
 
+  // Parse rectifier reads from data
+  for (const row of mvData) {
+    const point = String(row['Point'] || '').trim();
+    if (!/^r\s*1\.000/i.test(point)) continue;
+    const readStr = String(row['Read'] || row['MV'] || '').replace(/[Vv]/g,'').trim();
+    const read    = parseFloat(readStr);
+    if (isNaN(read)) continue;
+    const addr = String(row['Location'] || row['Address'] || '').trim();
+    if (!rectifier) rectifier = { x: 0, y: 0, address: addr, volt: null, amp: null };
+    // Distinguish volt vs amp by magnitude — amps typically < 20, volts > 20 for rectifiers
+    if (Math.abs(read) > 20) rectifier.volt = read;
+    else rectifier.amp = read;
+    if (addr) rectifier.address = addr;
+  }
+  saveRectifier();
+  updateRectPanel();
   savePins(); drawOverlay(); renderSidebar();
+  detectPOD();
   setMsg(`Applied — ${matched} of ${pins.length} pins colored.`);
 }
 
@@ -519,6 +575,56 @@ function drawOverlay() {
   }
   document.getElementById('status-pins').textContent = pins.length;
   document.getElementById('tp-count').textContent    = pins.length;
+
+  // Draw rectifier marker
+  if (rectifier) {
+    const rx = rectifier.x * scale;
+    const ry = rectifier.y * scale;
+    const rs = Math.max(14, 16 * scale);
+
+    // Outer pulsing ring
+    overlayCtx.beginPath();
+    overlayCtx.arc(rx, ry, rs * 1.6, 0, Math.PI * 2);
+    overlayCtx.strokeStyle = 'rgba(240,192,48,0.4)';
+    overlayCtx.lineWidth   = Math.max(1, 2 * scale);
+    overlayCtx.stroke();
+
+    // Inner filled circle
+    overlayCtx.beginPath();
+    overlayCtx.arc(rx, ry, rs, 0, Math.PI * 2);
+    overlayCtx.fillStyle   = 'rgba(240,192,48,0.25)';
+    overlayCtx.fill();
+    overlayCtx.strokeStyle = '#f0c030';
+    overlayCtx.lineWidth   = Math.max(1.5, 2 * scale);
+    overlayCtx.stroke();
+
+    // Lightning bolt label
+    const rfs = Math.max(10, Math.min(16, 13 * scale));
+    overlayCtx.font         = `bold ${rfs}px Courier New`;
+    overlayCtx.textAlign    = 'center';
+    overlayCtx.textBaseline = 'middle';
+    overlayCtx.fillStyle    = '#f0c030';
+    overlayCtx.shadowColor  = 'rgba(0,0,0,0.9)';
+    overlayCtx.shadowBlur   = 4;
+    overlayCtx.fillText('⚡', rx, ry);
+    overlayCtx.shadowBlur   = 0;
+
+    // "RECT" label below
+    const lfs = Math.max(7, Math.min(10, 8 * scale));
+    overlayCtx.font      = `bold ${lfs}px Courier New`;
+    overlayCtx.fillStyle = '#f0c030';
+    overlayCtx.shadowColor = 'rgba(0,0,0,0.9)';
+    overlayCtx.shadowBlur  = 3;
+    overlayCtx.fillText('RECT', rx, ry + rs + lfs + 2);
+    overlayCtx.shadowBlur  = 0;
+
+    // Offline warning
+    if (rectifier.volt === 0 && rectifier.amp === 0) {
+      overlayCtx.font      = `bold ${lfs}px Courier New`;
+      overlayCtx.fillStyle = '#f04040';
+      overlayCtx.fillText('OFFLINE', rx, ry + rs + lfs * 2 + 4);
+    }
+  }
 }
 
 // ── COLOR REASON TEXT ────────────────────────────────────────────────────────
@@ -652,6 +758,19 @@ overlayCanvas.addEventListener('click', (e) => {
     showDetail(pin, e);
     return;
   }
+  // Rectifier placement mode
+  if (mode === 'rect') {
+    if (!pdfPage) { setMsg('Upload a PDF map first.'); return; }
+    if (rectifier && !confirm('A rectifier is already placed. Replace it?')) return;
+    rectifier = { x: cx / scale, y: cy / scale, address: '995 Piccard Ave / Arey Dr', volt: null, amp: null };
+    saveRectifier();
+    drawOverlay();
+    updateRectPanel();
+    detectPOD();
+    setMsg('Rectifier placed. Switch to Place Pins mode to continue adding test points.');
+    setMode('place');
+    return;
+  }
   // No pin hit — place new pin if in place mode
   if (mode !== 'place') return;
   if (!pdfPage) { setMsg('Upload a PDF map first.'); return; }
@@ -722,14 +841,72 @@ function toggleLegend() {
 // Show legend toggle once PDF loads
 const _origLoadPDF = loadPDF;
 
+// ── POD DETECTION ────────────────────────────────────────────────────────────
+function detectPOD() {
+  if (!rectifier || !pins.length) return;
+
+  // Find closest pin to rectifier
+  let closest = null, minDist = Infinity;
+  for (const pin of pins) {
+    const dx = pin.x - rectifier.x;
+    const dy = pin.y - rectifier.y;
+    const d  = Math.sqrt(dx*dx + dy*dy);
+    if (d < minDist) { minDist = d; closest = pin; }
+  }
+  if (!closest) return;
+
+  // Clear old POD flags
+  for (const pin of pins) { pin.isPOD = false; pin.isPODSuspected = false; }
+
+  // Check if labeled POD
+  const labeledPOD = closest.tpNum.toUpperCase().includes('POD') ||
+                     closest.address.toUpperCase().includes('POD');
+
+  // Check POD-like behavior: healthy off-read AND high differential
+  const behaviorPOD = closest.offRead !== null &&
+                      closest.offRead < -0.550 &&
+                      closest.diff !== null &&
+                      closest.diff > 150;
+
+  if (labeledPOD) {
+    closest.isPOD = true;
+  } else if (behaviorPOD) {
+    closest.isPODSuspected = true;
+  } else {
+    // Still flag geographically closest as suspected if within reasonable distance
+    closest.isPODSuspected = true;
+  }
+
+  savePins();
+  renderSidebar();
+  drawOverlay();
+}
+
+// ── RECTIFIER PANEL ───────────────────────────────────────────────────────────
+function updateRectPanel() {
+  const panel = document.getElementById('rect-panel');
+  if (!rectifier) { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  document.getElementById('rect-addr').textContent = rectifier.address || 'Rectifier';
+
+  const offline = rectifier.volt === 0 && rectifier.amp === 0;
+  let html = '';
+  if (offline) html += '<div class="rect-offline">⚠ OFFLINE — 0V / 0A</div>';
+  if (rectifier.volt !== null) html += `<div class="rect-reading"><span class="rect-label">Voltage</span><span class="rect-val">${rectifier.volt}V</span></div>`;
+  if (rectifier.amp  !== null) html += `<div class="rect-reading"><span class="rect-label">Current</span><span class="rect-val">${rectifier.amp}A</span></div>`;
+  if (!html) html = '<div style="color:var(--text-muted);font-size:10px">No reads loaded yet</div>';
+  document.getElementById('rect-readings').innerHTML = html;
+}
+
 // ── EXPORT PINS ───────────────────────────────────────────────────────────────
 function exportPins() {
   if (!pins.length) { setMsg('No pins to export.'); return; }
   const payload = {
-    version: 2,
+    version: 3,
     station: '409',
     exported: new Date().toISOString(),
-    pins: pins
+    pins: pins,
+    rectifier: rectifier
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url  = URL.createObjectURL(blob);
@@ -770,9 +947,16 @@ Click Cancel to MERGE (add imported pins to existing).`
       } else {
         pins = imported;
       }
+      // Restore rectifier if present in export
+      if (!Array.isArray(payload) && payload.rectifier) {
+        rectifier = payload.rectifier;
+        saveRectifier();
+        updateRectPanel();
+      }
       savePins();
       drawOverlay();
       renderSidebar();
+      detectPOD();
       setMsg('Imported ' + pins.length + ' pins from ' + file.name);
     } catch(err) {
       setMsg('Error reading pin file: ' + err.message);
@@ -822,7 +1006,7 @@ function closeEditModal() {
   editingPinId = null;
 }
 
-loadPins(); renderSidebar(); drawOverlay(); setMode('place');
+loadPins(); loadRectifier(); renderSidebar(); drawOverlay(); updateRectPanel(); setMode('place');
 </script>
 </body>
 </html>
