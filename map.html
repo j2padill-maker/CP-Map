@@ -395,9 +395,28 @@ async function loadPDF(input) {
 
 async function renderPDF() {
   if (!pdfPage) return;
-  const vp = pdfPage.getViewport({ scale });
-  mapCanvas.width = overlayCanvas.width = vp.width;
-  mapCanvas.height = overlayCanvas.height = vp.height;
+
+  // Use device pixel ratio for crisp rendering on all screens
+  const dpr = window.devicePixelRatio || 1;
+  const vp  = pdfPage.getViewport({ scale: scale * dpr });
+
+  // Set canvas physical size to match high-DPI
+  mapCanvas.width     = vp.width;
+  mapCanvas.height    = vp.height;
+  overlayCanvas.width  = vp.width;
+  overlayCanvas.height = vp.height;
+
+  // Set CSS display size to the logical size
+  const logicalW = pdfPage.getViewport({ scale }).width;
+  const logicalH = pdfPage.getViewport({ scale }).height;
+  mapCanvas.style.width      = logicalW + 'px';
+  mapCanvas.style.height     = logicalH + 'px';
+  overlayCanvas.style.width  = logicalW + 'px';
+  overlayCanvas.style.height = logicalH + 'px';
+
+  // Scale context to account for DPR
+  mapCtx.setTransform(1, 0, 0, 1, 0, 0);
+
   await pdfPage.render({ canvasContext: mapCtx, viewport: vp }).promise;
   drawOverlay();
 }
@@ -548,7 +567,9 @@ const COLORS = {
 };
 
 function drawOverlay() {
+  const dpr = window.devicePixelRatio || 1;
   overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  overlayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const r = CIRCLE_R * scale;
   for (const pin of pins) {
     const sx = pin.x * scale, sy = pin.y * scale;
@@ -719,10 +740,11 @@ function flashPin(pin) {
 
 // ── PIN HIT TEST ──────────────────────────────────────────────────────────────
 function pinAtXY(cx, cy) {
+  // cx/cy are in CSS logical pixels
   for (const pin of pins) {
     const dx = pin.x * scale - cx;
     const dy = pin.y * scale - cy;
-    if (Math.sqrt(dx*dx + dy*dy) <= CIRCLE_R * scale + 4) return pin;
+    if (Math.sqrt(dx*dx + dy*dy) <= CIRCLE_R * scale + 8) return pin;
   }
   return null;
 }
@@ -731,7 +753,10 @@ function pinAtXY(cx, cy) {
 const tooltip = document.getElementById('map-tooltip');
 overlayCanvas.addEventListener('mousemove', (e) => {
   const rect = overlayCanvas.getBoundingClientRect();
-  const pin  = pinAtXY(e.clientX - rect.left, e.clientY - rect.top);
+  const dpr  = window.devicePixelRatio || 1;
+  const cx   = (e.clientX - rect.left);
+  const cy   = (e.clientY - rect.top);
+  const pin  = pinAtXY(cx, cy);
   if (pin) {
     overlayCanvas.style.cursor = 'pointer';
     document.getElementById('tt-name').textContent = pin.tpNum + ' — ' + pin.address;
@@ -751,7 +776,7 @@ overlayCanvas.addEventListener('mouseleave', () => { tooltip.style.display = 'no
 // ── CLICK: place pin OR show detail ──────────────────────────────────────────
 overlayCanvas.addEventListener('click', (e) => {
   const rect = overlayCanvas.getBoundingClientRect();
-  const cx   = e.clientX - rect.left;
+  const cx   = e.clientX - rect.left;  // logical CSS pixels
   const cy   = e.clientY - rect.top;
   const pin  = pinAtXY(cx, cy);
   if (pin) {
@@ -774,7 +799,7 @@ overlayCanvas.addEventListener('click', (e) => {
   // No pin hit — place new pin if in place mode
   if (mode !== 'place') return;
   if (!pdfPage) { setMsg('Upload a PDF map first.'); return; }
-  pendingXY = { x: cx / scale, y: cy / scale };
+  pendingXY = { x: cx / scale, y: cy / scale }; // store in PDF-space
   const nums = pins.map(p => parseInt(p.tpNum.replace(/\D/g,''))).filter(n => !isNaN(n));
   document.getElementById('tp-num').value  = 'TP ' + (nums.length ? Math.max(...nums) + 1 : 1);
   document.getElementById('tp-addr').value = '';
@@ -1006,6 +1031,7 @@ function closeEditModal() {
   editingPinId = null;
 }
 
+window.addEventListener('resize', () => { if (pdfPage) fitPage(); });
 loadPins(); loadRectifier(); renderSidebar(); drawOverlay(); updateRectPanel(); setMode('place');
 </script>
 </body>
