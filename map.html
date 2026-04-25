@@ -457,21 +457,24 @@ async function renderPDF() {
   // At low zoom we use 2x; at high zoom we match the zoom so PDF.js draws
   // native pixels rather than stretched ones. Cap at 5x to avoid OOM.
   const dpr     = window.devicePixelRatio || 1;
-  const quality = Math.min(Math.max(dpr, scale * dpr), 5);
-  renderQuality = quality; // share with drawOverlay and hit-test
+  // Always render at minimum 2x for baseline sharpness.
+  // As zoom increases beyond 1.0, add more resolution proportionally.
+  // Cap at 4x to avoid excessive memory use.
+  const quality = Math.min(Math.max(2, scale * 2 * dpr), 4);
+  renderQuality = quality;
 
   const vpHiRes = pdfPage.getViewport({ scale: scale * quality });
   const vpLogic = pdfPage.getViewport({ scale });
 
-  // PDF canvas = high-res so PDF.js renders crisp text at current zoom
+  // Both canvases share the same physical high-res size
   mapCanvas.width        = vpHiRes.width;
   mapCanvas.height       = vpHiRes.height;
-  mapCanvas.style.width  = vpLogic.width  + 'px';
-  mapCanvas.style.height = vpLogic.height + 'px';
+  overlayCanvas.width    = vpHiRes.width;
+  overlayCanvas.height   = vpHiRes.height;
 
-  // Overlay canvas = logical CSS size only — keeps mouse coords and drawing in sync
-  overlayCanvas.width        = vpLogic.width;
-  overlayCanvas.height       = vpLogic.height;
+  // Both displayed at logical CSS size
+  mapCanvas.style.width      = vpLogic.width  + 'px';
+  mapCanvas.style.height     = vpLogic.height + 'px';
   overlayCanvas.style.width  = vpLogic.width  + 'px';
   overlayCanvas.style.height = vpLogic.height + 'px';
 
@@ -766,8 +769,11 @@ const COLORS = {
 };
 
 function drawOverlay() {
+  const q = renderQuality;
   overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-  overlayCtx.setTransform(1, 0, 0, 1, 0, 0); // identity — overlay is at logical CSS size
+  // The overlay canvas is physically q× larger than CSS pixels.
+  // Apply transform so all drawing uses logical CSS-pixel coordinates.
+  overlayCtx.setTransform(q, 0, 0, q, 0, 0);
   // Scale context by quality so coordinates match logical pixel space
   overlayCtx.setTransform(quality, 0, 0, quality, 0, 0);
   const r = CIRCLE_R * scale;
