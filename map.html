@@ -1045,15 +1045,47 @@ function showDetail(pin, e) {
     ` : ''}
     <div class="dp-reason ${pin.color}">${colorReason(pin)}</div>`;
 
-  // Position near click, keep on screen
-  const pw = 280, ph = 260;
-  let left = e ? e.clientX + 16 : window.innerWidth/2 - pw/2;
-  let top  = e ? e.clientY - 20 : window.innerHeight/2 - ph/2;
-  if (left + pw > window.innerWidth  - 10) left = (e ? e.clientX : window.innerWidth/2)  - pw - 16;
-  if (top  + ph > window.innerHeight - 10) top  = window.innerHeight - ph - 10;
-  popup.style.left    = left + 'px';
-  popup.style.top     = top  + 'px';
-  popup.style.display = 'block';
+  // Position near click — measure actual height AFTER rendering content
+  const pw = 300;
+  popup.style.width    = pw + 'px';
+  popup.style.left     = '-9999px';   // render off-screen first to measure
+  popup.style.top      = '0px';
+  popup.style.maxHeight = '';
+  popup.style.overflowY = '';
+  popup.style.display  = 'block';
+
+  const ph      = popup.offsetHeight;  // real rendered height
+  const margin  = 10;
+  const navH    = 80; // approx nav bar height
+  const clickX  = e ? e.clientX : window.innerWidth  / 2;
+  const clickY  = e ? e.clientY : window.innerHeight / 2;
+
+  // Horizontal: prefer right of click, flip left if not enough room
+  let left = clickX + 16;
+  if (left + pw > window.innerWidth - margin) left = clickX - pw - 16;
+  left = Math.max(margin, left);
+
+  // Vertical: prefer below click, flip above if not enough room below
+  const roomBelow = window.innerHeight - clickY - margin;
+  const roomAbove = clickY - navH - margin;
+  let top;
+  if (ph <= roomBelow) {
+    // Fits below — ideal
+    top = clickY - 20;
+  } else if (ph <= roomAbove) {
+    // Fits above — flip up
+    top = clickY - ph + 20;
+  } else {
+    // Doesn't fully fit either way — anchor to bottom of viewport, add internal scroll
+    const maxH = window.innerHeight - navH - margin * 2;
+    popup.style.maxHeight = maxH + 'px';
+    popup.style.overflowY = 'auto';
+    top = navH + margin;
+  }
+  top  = Math.max(navH + margin, top);
+
+  popup.style.left = left + 'px';
+  popup.style.top  = top  + 'px';
   flashPin(pin);
 }
 
