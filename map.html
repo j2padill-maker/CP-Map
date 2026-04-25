@@ -922,35 +922,104 @@ function pinAtXY(cx, cy) {
 
 // ── HOVER TOOLTIP + DRAG ──────────────────────────────────────────────────────
 const tooltip = document.getElementById('map-tooltip');
+let wasJustDragging = false;  // survives mouseup→click sequence
 
 overlayCanvas.addEventListener('mousedown', (e) => {
   if (mode !== 'drag') return;
   const rect = overlayCanvas.getBoundingClientRect();
   const cx = e.clientX - rect.left;
   const cy = e.clientY - rect.top;
+
+  // Try pin first
   const pin = pinAtXY(cx, cy);
   if (pin) {
-    dragPin   = pin;
+    dragPin    = pin;
     isDragging = true;
-    dragOffX  = cx - pin.x * scale;
-    dragOffY  = cy - pin.y * scale;
+    dragOffX   = cx - pin.x * scale;
+    dragOffY   = cy - pin.y * scale;
     overlayCanvas.style.cursor = 'grabbing';
     e.preventDefault();
+    return;
+  }
+
+  // Try rectifier marker
+  if (rectifier) {
+    const dx = rectifier.x * scale - cx;
+    const dy = rectifier.y * scale - cy;
+    const r  = Math.max(14, 16 * scale) * 1.6 + 8;
+    if (Math.sqrt(dx*dx + dy*dy) <= r) {
+      dragPin    = null;
+      isDragging = true;
+      dragOffX   = cx - rectifier.x * scale;
+      dragOffY   = cy - rectifier.y * scale;
+      overlayCanvas.style.cursor = 'grabbing';
+      // Flag that we're dragging the rectifier, not a pin
+      overlayCanvas.dataset.draggingRect = '1';
+      e.preventDefault();
+    }
   }
 });
 
+// Attach mousemove and mouseup to document so fast dragging can't escape the canvas
+document.addEventListener('mousemove', (e) => {
+  if (!isDragging) {
+    // Hover tooltip (only when over the canvas and not dragging)
+    return;
+  }
+  const rect = overlayCanvas.getBoundingClientRect();
+  const cx   = e.clientX - rect.left;
+  const cy   = e.clientY - rect.top;
+  tooltip.style.display = 'none';
+
+  if (overlayCanvas.dataset.draggingRect === '1' && rectifier) {
+    rectifier.x = (cx - dragOffX) / scale;
+    rectifier.y = (cy - dragOffY) / scale;
+  } else if (dragPin) {
+    dragPin.x = (cx - dragOffX) / scale;
+    dragPin.y = (cy - dragOffY) / scale;
+  }
+  drawOverlay();
+});
+
+document.addEventListener('mouseup', (e) => {
+  if (!isDragging) return;
+  wasJustDragging = true;
+  setTimeout(() => { wasJustDragging = false; }, 50); // let click fire first
+
+  if (overlayCanvas.dataset.draggingRect === '1') {
+    saveRectifier();
+    detectPOD();
+    renderSidebar();
+    updateRectPanel();
+    setMsg('Rectifier repositioned.');
+    delete overlayCanvas.dataset.draggingRect;
+  } else if (dragPin) {
+    savePins();
+    detectPOD();
+    renderSidebar();
+    setMsg('Pin repositioned: ' + dragPin.tpNum);
+  }
+  dragPin    = null;
+  isDragging = false;
+  overlayCanvas.style.cursor = mode === 'drag' ? 'grab' : mode === 'place' ? 'crosshair' : 'default';
+});
+
 overlayCanvas.addEventListener('mousemove', (e) => {
+  if (isDragging) return;  // document listener handles it while dragging
   const rect = overlayCanvas.getBoundingClientRect();
   const cx   = e.clientX - rect.left;
   const cy   = e.clientY - rect.top;
 
-  // Handle active drag
-  if (isDragging && dragPin) {
-    dragPin.x = (cx - dragOffX) / scale;
-    dragPin.y = (cy - dragOffY) / scale;
-    drawOverlay();
-    tooltip.style.display = 'none';
-    return;
+  // Show grab cursor over rectifier in drag mode
+  if (mode === 'drag' && rectifier) {
+    const dx = rectifier.x * scale - cx;
+    const dy = rectifier.y * scale - cy;
+    const r  = Math.max(14, 16 * scale) * 1.6 + 8;
+    if (Math.sqrt(dx*dx + dy*dy) <= r) {
+      overlayCanvas.style.cursor = 'grab';
+      tooltip.style.display = 'none';
+      return;
+    }
   }
 
   const pin = pinAtXY(cx, cy);
@@ -969,30 +1038,13 @@ overlayCanvas.addEventListener('mousemove', (e) => {
   }
 });
 
-overlayCanvas.addEventListener('mouseup', (e) => {
-  if (isDragging && dragPin) {
-    savePins();
-    detectPOD();
-    renderSidebar();
-    setMsg('Pin repositioned: ' + dragPin.tpNum);
-  }
-  dragPin    = null;
-  isDragging = false;
-  overlayCanvas.style.cursor = mode === 'drag' ? 'grab' : mode === 'place' ? 'crosshair' : 'default';
-});
-
 overlayCanvas.addEventListener('mouseleave', () => {
-  tooltip.style.display = 'none';
-  if (isDragging && dragPin) {
-    savePins(); detectPOD(); renderSidebar();
-  }
-  dragPin = null; isDragging = false;
+  if (!isDragging) tooltip.style.display = 'none';
 });
 
 // ── CLICK: place pin OR show detail ──────────────────────────────────────────
 overlayCanvas.addEventListener('click', (e) => {
-  // Ignore click if we just finished a drag
-  if (isDragging) return;
+  if (wasJustDragging) return;  // suppress click after drag release
   const rect = overlayCanvas.getBoundingClientRect();
   const cx   = e.clientX - rect.left;  // logical CSS pixels
   const cy   = e.clientY - rect.top;
