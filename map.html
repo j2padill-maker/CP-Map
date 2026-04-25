@@ -449,23 +449,19 @@ async function restorePDF() {
 async function renderPDF() {
   if (!pdfPage) return;
 
-  // Cancel any in-progress render to avoid stacking render tasks
+  // Cancel any in-progress render
   if (renderPDF._task) { try { renderPDF._task.cancel(); } catch(e) {} }
 
-  // Scale render quality with zoom level so text stays crisp when zoomed in.
-  // At low zoom we use 2x; at high zoom we match the zoom so PDF.js draws
-  // native pixels rather than stretched ones. Cap at 5x to avoid OOM.
-  const dpr     = window.devicePixelRatio || 1;
-  const quality = Math.min(Math.max(2, scale * 2 * dpr), 4);
-
+  // Fixed 2x quality — crisp baseline without breaking overlay coordinate math
+  const quality = 2;
   const vpHiRes = pdfPage.getViewport({ scale: scale * quality });
   const vpLogic = pdfPage.getViewport({ scale });
 
-  // Both canvases share the same physical high-res size
-  mapCanvas.width        = vpHiRes.width;
-  mapCanvas.height       = vpHiRes.height;
-  overlayCanvas.width    = vpHiRes.width;
-  overlayCanvas.height   = vpHiRes.height;
+  // Both canvases at same physical size
+  mapCanvas.width      = vpHiRes.width;
+  mapCanvas.height     = vpHiRes.height;
+  overlayCanvas.width  = vpHiRes.width;
+  overlayCanvas.height = vpHiRes.height;
 
   // Both displayed at logical CSS size
   mapCanvas.style.width      = vpLogic.width  + 'px';
@@ -479,7 +475,7 @@ async function renderPDF() {
     await task.promise;
     drawOverlay();
   } catch(e) {
-    if (e?.name !== 'RenderingCancelledException') console.warn('PDF render error:', e);
+    if (e?.name !== 'RenderingCancelledException') console.warn('PDF render:', e);
   }
 }
 
@@ -491,14 +487,8 @@ function fitPage() {
   document.getElementById('zoom-label').textContent = Math.round(scale * 100) + '%';
   renderPDF();
 }
-
-let _zoomTimer = null;
-function _debouncedRender() {
-  clearTimeout(_zoomTimer);
-  _zoomTimer = setTimeout(() => renderPDF(), 80);
-}
-function zoomIn()  { scale = Math.min(scale * 1.25, 6);    document.getElementById('zoom-label').textContent = Math.round(scale*100)+'%'; _debouncedRender(); }
-function zoomOut() { scale = Math.max(scale / 1.25, 0.15); document.getElementById('zoom-label').textContent = Math.round(scale*100)+'%'; _debouncedRender(); }
+function zoomIn()  { scale = Math.min(scale * 1.25, 6);    document.getElementById('zoom-label').textContent = Math.round(scale*100)+'%'; renderPDF(); }
+function zoomOut() { scale = Math.max(scale / 1.25, 0.15); document.getElementById('zoom-label').textContent = Math.round(scale*100)+'%'; renderPDF(); }
 
 // Click handling moved to overlayCanvas listener below
 
@@ -764,13 +754,9 @@ const COLORS = {
 };
 
 function drawOverlay() {
-  // Compute the physical-to-CSS ratio directly from canvas dimensions.
-  // This is always correct regardless of when drawOverlay is called.
-  const cssW = parseFloat(overlayCanvas.style.width)  || overlayCanvas.width;
-  const cssH = parseFloat(overlayCanvas.style.height) || overlayCanvas.height;
-  const q    = overlayCanvas.width / cssW;   // physical px per CSS px
+  const quality = 2;
   overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-  overlayCtx.setTransform(q, 0, 0, q, 0, 0);
+  overlayCtx.setTransform(quality, 0, 0, quality, 0, 0);
   // Scale context by quality so coordinates match logical pixel space
   overlayCtx.setTransform(quality, 0, 0, quality, 0, 0);
   const r = CIRCLE_R * scale;
