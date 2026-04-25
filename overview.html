@@ -170,9 +170,9 @@
   <div class="summary-row" id="summary-row" style="display:none">
     <div class="summary-card"><div class="sc-label">Survey Cycles</div><div class="sc-value" id="s-cycles">—</div><div class="sc-sub" id="s-daterange"></div></div>
     <div class="summary-card"><div class="sc-label">Test Points</div><div class="sc-value" id="s-points">—</div></div>
-    <div class="summary-card red">   <div class="sc-label">Critical</div>  <div class="sc-value" id="s-red">—</div>   <div class="sc-sub">Off &lt; threshold + low diff</div></div>
-    <div class="summary-card orange"><div class="sc-label">High Concern</div><div class="sc-value" id="s-orange">—</div><div class="sc-sub">Below avg off or low diff</div></div>
-    <div class="summary-card yellow"><div class="sc-label">Monitor</div>   <div class="sc-value" id="s-yellow">—</div>  <div class="sc-sub">Marginal protection</div></div>
+    <div class="summary-card red">   <div class="sc-label">Critical</div>  <div class="sc-value" id="s-red">—</div>   <div class="sc-sub">Failing threshold or ≤25mV gap</div></div>
+    <div class="summary-card orange"><div class="sc-label">High Concern</div><div class="sc-value" id="s-orange">—</div><div class="sc-sub">Below threshold or 26-40mV gap</div></div>
+    <div class="summary-card yellow"><div class="sc-label">Monitor</div>   <div class="sc-value" id="s-yellow">—</div>  <div class="sc-sub">Bottom quartile or 41-55mV gap</div></div>
     <div class="summary-card green"> <div class="sc-label">Passing</div>   <div class="sc-value" id="s-green">—</div>   <div class="sc-sub">Acceptable protection</div></div>
     <div class="summary-card"><div class="sc-label">Cycle Drops ≥35mV</div><div class="sc-value" id="s-drops">—</div><div class="sc-sub">Since last survey</div></div>
   </div>
@@ -484,12 +484,13 @@ function analyze(records) {
     }
 
     // 3. ON/OFF DIFFERENTIAL
+    // 0-25mV = red | 26-40mV = orange | 41-55mV = yellow | >55mV = green
     let diffScore = 'green';
     if (diff !== null) {
       if      (diff <= 25) diffScore = 'red';
       else if (diff <= 40) diffScore = 'orange';
       else if (diff <= 55) diffScore = 'yellow';
-      else                 diffScore = 'green';
+      else                 diffScore = 'green'; // >55mV is always green for differential
     }
 
     // Worst score wins
@@ -574,7 +575,7 @@ function buildExplanation(p) {
   // ── 1. THRESHOLD ──────────────────────────────────────────────────────────
   if (p.offLimit !== null) {
     if (p.failingThreshold) {
-      parts.push(`<b style="color:var(--red)">⚠ FAILING THRESHOLD:</b> Off-read of ${offStr} does not meet the lower limit of ${limStr}. The pipe at this location is not receiving adequate cathodic protection and is considered a failing read.`);
+      parts.push(`<b style="color:var(--red)">⚠ FAILING THRESHOLD:</b> Off-read of ${offStr} does not meet the lower limit of ${limStr}. The pipe at this location is not receiving adequate cathodic protection — this is a failing read per station criteria.`);
     } else {
       parts.push(`<b style="color:var(--green)">✓ THRESHOLD PASSING:</b> Off-read of ${offStr} meets the lower limit of ${limStr}.`);
     }
@@ -604,13 +605,13 @@ function buildExplanation(p) {
   // ── 3. ON/OFF DIFFERENTIAL ────────────────────────────────────────────────
   if (p.diff !== null) {
     if (p.diff <= 25) {
-      parts.push(`<b style="color:var(--red)">⚠ CRITICAL DIFFERENTIAL:</b> ON/OFF gap of ${diffStr} is critically low (≤25mV). The rectifier current is barely polarizing the pipe at this location. A short circuit nearby is likely drawing current away — this is a strong indicator of a fault.`);
+      parts.push(`<b style="color:var(--red)">⚠ CRITICAL DIFFERENTIAL:</b> ON/OFF gap of ${diffStr} is critically low (25mV or less). The rectifier current is barely polarizing the pipe at this location. A short circuit nearby is likely drawing current away from this test point — strong indicator of a fault.`);
     } else if (p.diff <= 40) {
-      parts.push(`<b style="color:var(--orange)">⚠ LOW DIFFERENTIAL:</b> ON/OFF gap of ${diffStr} is low (26-40mV). Insufficient polarization at this location. Investigate current flow and nearby bonds.`);
+      parts.push(`<b style="color:var(--orange)">⚠ LOW DIFFERENTIAL:</b> ON/OFF gap of ${diffStr} is low (between 26-40mV). Insufficient polarization at this location — current is not effectively reaching this pipe. Investigate nearby bonds and current flow.`);
     } else if (p.diff <= 55) {
-      parts.push(`<b style="color:var(--yellow)">△ MARGINAL DIFFERENTIAL:</b> ON/OFF gap of ${diffStr} is marginal (41-55mV). Acceptable but below optimal — monitor in future surveys.`);
+      parts.push(`<b style="color:var(--yellow)">△ MARGINAL DIFFERENTIAL:</b> ON/OFF gap of ${diffStr} is marginal (between 41-55mV). Current is reaching this pipe but polarization is below the 55mV optimal threshold — monitor in future surveys for continued decline.`);
     } else {
-      parts.push(`<b style="color:var(--green)">✓ HEALTHY DIFFERENTIAL:</b> ON/OFF gap of ${diffStr} is above 55mV — indicating effective polarization at this location.`);
+      parts.push(`<b style="color:var(--green)">✓ HEALTHY DIFFERENTIAL:</b> ON/OFF gap of ${diffStr} is above 55mV — current is effectively polarizing the pipe at this location.`);
     }
   }
 
@@ -693,7 +694,17 @@ function renderCard(p) {
     deltaHTML = `<span style="color:${cls}">${arrow} ${Math.abs(p.offDelta)}mV</span>`;
   }
 
-  const diffColor = p.diff !== null && p.diff < 60 ? 'var(--red)' : p.diff !== null && p.diff > 100 ? 'var(--green)' : 'var(--yellow)';
+  // Differential column color is ALWAYS based on diff score alone
+  // regardless of overall card color — shows the diff criteria independently
+  const diffColor = p.diff === null ? 'var(--text-muted)'
+    : p.diff <= 25 ? 'var(--red)'      // 0-25mV = red
+    : p.diff <= 40 ? 'var(--orange)'   // 26-40mV = orange
+    : p.diff <= 55 ? 'var(--yellow)'   // 41-55mV = yellow
+    : 'var(--green)';                  // >55mV = green
+
+  // Off-read column color: red if failing threshold, green if passing, grey if no limit
+  const offReadColor = p.offLimit === null ? 'var(--text-dim)'
+    : p.failingThreshold ? 'var(--red)' : 'var(--green)';
   const dropFlag  = p.drops.filter(d => d.type === 'off').length > 0
     ? `<span style="font-size:9px;background:rgba(240,64,64,0.2);color:var(--red);padding:1px 5px;margin-left:6px">DROP FLAGGED</span>` : '';
 
@@ -706,7 +717,7 @@ function renderCard(p) {
         <div class="ac-reads">
           <div class="ac-read-block">
             <div class="ac-read-label">Off-Read</div>
-            <div class="ac-read-val" style="color:var(--${c === 'red' ? 'red' : c === 'orange' ? 'orange' : 'text'})">${p.offRead !== null ? (p.offRead*1000).toFixed(0)+'mV' : '—'}</div>
+            <div class="ac-read-val" style="color:${offReadColor}">${p.offRead !== null ? (p.offRead*1000).toFixed(0)+'mV' : '—'}</div>
           </div>
           <div class="ac-read-block">
             <div class="ac-read-label">On-Read</div>
