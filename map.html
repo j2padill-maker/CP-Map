@@ -531,9 +531,17 @@ function applyDataToPoints() {
     return parts.slice(0, 2).join(' '); // e.g. "4265 marzo"
   }
 
+  // Detect read-type column (Book2: "Measurement Point Characteristic Name")
+  const sampleRow = mvData[0] || {};
+  const readTypeCol = Object.keys(sampleRow).find(k =>
+    k.toLowerCase().includes('characteristic') ||
+    k.toLowerCase().includes('read type') ||
+    k.toLowerCase().includes('measurement point')
+  ) || null;
+
   // Group rows by normalized address (primary) — also track tp number as fallback key
-  const groups = {};      // keyed by normAddr
-  const tpToAddr = {};    // normTP -> normAddr, for fallback lookup
+  const groups = {};      // keyed by addrKey
+  const tpToAddr = {};    // normTP -> addrKey, for fallback lookup
 
   for (const row of mvData) {
     const point   = String(row['Point']    || '').trim();
@@ -545,44 +553,70 @@ function applyDataToPoints() {
     const limit   = parseFloat(limitStr);
     if (!point || isNaN(read) || point.toUpperCase().startsWith('R ')) continue;
 
-    const ak = addrKey(addr);   // primary key
-    const tk = normTP(point);   // secondary key
+    // IO/ON flag — identical logic to overview.html
+    let readType = 'unknown';
+    if (readTypeCol) {
+      const rt = String(row[readTypeCol] || '').toUpperCase();
+      if      (rt.includes('IO') || rt.includes(' I ')) readType = 'off';
+      else if (rt.includes('ON'))                        readType = 'on';
+    }
+
+    const ak = addrKey(addr);
+    const tk = normTP(point);
     if (!ak) continue;
 
     if (!groups[ak]) groups[ak] = { addr, tp: tk, reads: [] };
-    groups[ak].reads.push({ read, date, limit: isNaN(limit) ? null : limit });
-    if (tk) tpToAddr[tk] = ak;  // register tp→addr mapping
+    groups[ak].reads.push({ read, date, limit: isNaN(limit) ? null : limit, readType });
+    if (tk) tpToAddr[tk] = ak;
   }
 
-  // Build analysis keyed by addrKey
-  const tpAnalysis = {};  // addrKey -> analysis object
-
-  function cycleOffOn(c) {
-    if (c.reads.length < 2) return null;
-    return { off: Math.max(...c.reads), on: Math.min(...c.reads) };
-  }
+  // Build analysis keyed by addrKey — mirrors overview.html analyze() exactly
+  const tpAnalysis = {};
 
   for (const [ak, g] of Object.entries(groups)) {
+    // Group into date buckets (ISO date string = one survey cycle)
     const byDate = {};
     for (const r of g.reads) {
-      const dk = r.date.toDateString();
-      if (!byDate[dk]) byDate[dk] = { reads: [], date: r.date, limit: null };
-      byDate[dk].reads.push(r.read);
-      if (r.limit !== null) byDate[dk].limit = r.limit;
+      const dk = r.date.toISOString().slice(0, 10); // "2026-01-20"
+      if (!byDate[dk]) byDate[dk] = { on: null, off: null, reads: [], date: r.date, limit: null };
+      const cyc = byDate[dk];
+
+      if (r.readType === 'off') {
+        cyc.off = r.read;
+        if (r.limit !== null) cyc.limit = r.limit;
+      } else if (r.readType === 'on') {
+        cyc.on = r.read;
+      } else {
+        // Book1 fallback: collect and resolve numerically when we have 2+
+        cyc.reads.push(r.read);
+        if (r.limit !== null) cyc.limit = r.limit;
+      }
+
+      // Resolve numeric pairs as soon as we have 2 reads
+      if (cyc.reads.length >= 2) {
+        cyc.off = Math.max(...cyc.reads);
+        cyc.on  = Math.min(...cyc.reads);
+        cyc.reads = [];
+      }
     }
-    const cycles = Object.values(byDate).sort((a,b) => b.date - a.date);
+
+    // Sort cycles newest first, keep only cycles with at least one read
+    const cycles = Object.values(byDate)
+      .filter(c => c.on !== null || c.off !== null)
+      .sort((a, b) => b.date - a.date);
     if (!cycles.length) continue;
 
-    const latestPair = cycleOffOn(cycles[0]);
-    if (!latestPair) continue;
-    const priorPair  = cycles[1] ? cycleOffOn(cycles[1]) : null;
+    const latest = cycles[0];
+    const prior  = cycles[1] || null;
 
-    const offRead  = latestPair.off;
-    const onRead   = latestPair.on;
+    const offRead  = latest.off;
+    const onRead   = latest.on;
+    if (offRead === null || onRead === null) continue; // need both reads
+
     const diff     = Math.round(Math.abs(onRead - offRead) * 1000);
-    const offLimit = cycles[0].limit;
-    const offDelta = (priorPair && priorPair.off !== null)
-      ? Math.round((offRead - priorPair.off) * 1000) : null;
+    const offLimit = latest.limit;
+    const offDelta = (prior?.off != null && offRead != null)
+      ? Math.round((offRead - prior.off) * 1000) : null;
 
     tpAnalysis[ak] = { offRead, onRead, diff, offDelta, offLimit, addr: g.addr, tp: g.tp };
   }
