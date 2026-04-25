@@ -186,6 +186,7 @@
   </div>
   <div class="nav-map-btns">
     <button class="mode-btn active" id="btn-place" onclick="setMode('place')">📍 Place Pins</button>
+    <button class="mode-btn" id="btn-drag" onclick="setMode('drag')" title="Drag pins to reposition">✥ Drag Pins</button>
     <button class="mode-btn rect-mode" id="btn-rect" onclick="setMode('rect')" title="Place rectifier marker">⚡ Rectifier</button>
     <button class="mode-btn" id="btn-view" onclick="setMode('view')">👁 View Only</button>
     <button class="mode-btn" onclick="exportPins()" title="Save pins to file">💾 Export Pins</button>
@@ -261,10 +262,10 @@
     </div>
     <div class="legend-float" id="legend-float">
       <h2>Color Scale</h2>
-      <div class="legend-item"><div class="legend-dot" style="background:var(--red-solid)"></div> Critical &mdash; lowest off / low diff</div>
-      <div class="legend-item"><div class="legend-dot" style="background:var(--orange-solid)"></div> Concern &mdash; below average</div>
-      <div class="legend-item"><div class="legend-dot" style="background:var(--yellow-solid)"></div> Monitor &mdash; marginal</div>
-      <div class="legend-item"><div class="legend-dot" style="background:var(--green-solid)"></div> Acceptable</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--red-solid)"></div> Critical &mdash; failing threshold / low diff / big drop</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--orange-solid)"></div> Concern &mdash; moderate drop / low diff (26-40mV)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--yellow-solid)"></div> Monitor &mdash; minor drop / marginal diff (41-55mV)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--green-solid)"></div> Passing &mdash; all three criteria met</div>
       <div class="legend-item"><div class="legend-dot" style="background:#777"></div> No data matched</div>
     </div>
     <button class="legend-toggle" id="legend-toggle" onclick="toggleLegend()">&#9650; Legend</button>
@@ -338,7 +339,42 @@ const CIRCLE_R    = 30;
 const STORAGE_KEY  = 'cp409_v2_pins';
 const STORAGE_KEY_LEGACY = 'cp409_pins'; // fallback for older saved data
 
+// ── IndexedDB for PDF persistence ─────────────────────────────────────────────
+const IDB_NAME = 'cpscout', IDB_STORE = 'blobs', IDB_VER = 1;
+function openIDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(IDB_NAME, IDB_VER);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE);
+    req.onsuccess = e => res(e.target.result);
+    req.onerror   = e => rej(e.target.error);
+  });
+}
+async function idbSet(key, val) {
+  const db = await openIDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(val, key);
+    tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+  });
+}
+async function idbGet(key) {
+  const db = await openIDB();
+  return new Promise((res, rej) => {
+    const req = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(key);
+    req.onsuccess = e => res(e.target.result); req.onerror = e => rej(e.target.error);
+  });
+}
+async function idbDel(key) {
+  const db = await openIDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).delete(key);
+    tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+  });
+}
+
 let mode = 'place', pins = [], mvData = [];
+let dragPin = null, dragOffX = 0, dragOffY = 0, isDragging = false;
 let rectifier = null; // {x, y, address, volt, amp}
 const RECT_KEY = 'cp409_rectifier';
 let pdfDoc = null, pdfPage = null, scale = 1.0, pendingXY = null;
@@ -370,27 +406,44 @@ function loadRectifier() {
 function setMode(m) {
   mode = m;
   document.getElementById('btn-place').classList.toggle('active', m === 'place');
+  document.getElementById('btn-drag').classList.toggle('active',  m === 'drag');
   document.getElementById('btn-view').classList.toggle('active',  m === 'view');
   document.getElementById('btn-rect').classList.toggle('active',  m === 'rect');
-  mapCanvas.style.cursor = (m === 'place' || m === 'rect') ? 'crosshair' : 'default';
+  overlayCanvas.style.cursor = (m === 'place' || m === 'rect') ? 'crosshair' : m === 'drag' ? 'grab' : 'default';
+  mapCanvas.style.cursor     = overlayCanvas.style.cursor;
   document.getElementById('status-mode').textContent =
-    m === 'place' ? 'PLACE PINS' : m === 'rect' ? 'PLACE RECTIFIER' : 'VIEW ONLY';
+    m === 'place' ? 'PLACE PINS' : m === 'drag' ? 'DRAG PINS' : m === 'rect' ? 'PLACE RECTIFIER' : 'VIEW ONLY';
 }
 
 async function loadPDF(input) {
   const file = input.files[0]; if (!file) return;
-  document.getElementById('pdf-name').textContent = file.name;
+  const buf = await file.arrayBuffer();
+  await idbSet('pdfData', buf);
+  localStorage.setItem('cp409_pdfName', file.name);
+  await renderPDFFromBuffer(buf, file.name);
+}
+
+async function renderPDFFromBuffer(buf, name) {
+  document.getElementById('pdf-name').textContent = name || 'Cached PDF';
   document.getElementById('pdf-zone').classList.add('has-file');
   document.getElementById('drop-prompt').style.display = 'none';
   setMsg('Loading PDF…');
   try {
-    pdfDoc  = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+    pdfDoc  = await pdfjsLib.getDocument({ data: buf }).promise;
     pdfPage = await pdfDoc.getPage(1);
     fitPage();
     document.getElementById('pdf-controls').style.display = 'flex';
     document.getElementById('legend-toggle').style.display = 'block';
-    setMsg('PDF loaded — ' + file.name);
-  } catch(e) { setMsg('Error: ' + e.message); }
+    setMsg('PDF loaded — ' + (name || 'cached map'));
+  } catch(e) { setMsg('Error loading PDF: ' + e.message); }
+}
+
+async function restorePDF() {
+  try {
+    const buf  = await idbGet('pdfData');
+    const name = localStorage.getItem('cp409_pdfName') || 'Cached Map';
+    if (buf) await renderPDFFromBuffer(buf, name);
+  } catch(e) { /* no cached PDF */ }
 }
 
 async function renderPDF() {
@@ -477,32 +530,51 @@ function applyDataToPoints() {
     const readStr = String(row['Read']     || row['MV'] || '').replace(/[Vv]/g,'').trim();
     const read    = parseFloat(readStr);
     const date    = new Date(row['Read Date'] || row['Date'] || 0);
+    const limitStr = String(row['Lower Limit'] || row['LowerLimit'] || '').replace(/[Vv]/g,'').trim();
+    const limit   = parseFloat(limitStr);
     if (!point || isNaN(read) || point.toUpperCase().startsWith('R ')) continue;
     const key = normTP(point);
     if (!groups[key]) groups[key] = { addr, reads: [] };
-    groups[key].reads.push({ read, date });
+    groups[key].reads.push({ read, date, limit: isNaN(limit) ? null : limit });
   }
 
-  // Isolate latest cycle per TP, compute on/off/diff
-  // Jason's logic: numerically higher value = lower protection (-.350 worse than -.900)
+  // Isolate latest two cycles per TP, compute on/off/diff/delta/offLimit
   const tpAnalysis = {};
   for (const [key, g] of Object.entries(groups)) {
-    const latestDate = g.reads.reduce((a,b) => b.date > a.date ? b : a).date.toDateString();
-    const cycle      = g.reads.filter(r => r.date.toDateString() === latestDate).map(r => r.read);
-    if (cycle.length < 2) continue;
-    const offRead = Math.max(...cycle);  // least negative = off (rectifier off)
-    const onRead  = Math.min(...cycle);  // most negative  = on  (rectifier on)
-    const diff    = Math.round(Math.abs(onRead - offRead) * 1000);
-    tpAnalysis[key] = { offRead, onRead, diff, addr: g.addr };
+    // Sort by date desc, group into date buckets
+    const byDate = {};
+    for (const r of g.reads) {
+      const dk = r.date.toDateString();
+      if (!byDate[dk]) byDate[dk] = { reads: [], date: r.date, limit: null };
+      byDate[dk].reads.push(r.read);
+      if (r.limit !== null) byDate[dk].limit = r.limit;
+    }
+    const cycles = Object.values(byDate).sort((a,b) => b.date - a.date);
+    if (!cycles.length) continue;
+
+    function cycleOffOn(c) {
+      if (c.reads.length < 2) return null;
+      return { off: Math.max(...c.reads), on: Math.min(...c.reads) };
+    }
+
+    const latestPair = cycleOffOn(cycles[0]);
+    if (!latestPair) continue;
+    const priorPair  = cycles[1] ? cycleOffOn(cycles[1]) : null;
+
+    const offRead  = latestPair.off;
+    const onRead   = latestPair.on;
+    const diff     = Math.round(Math.abs(onRead - offRead) * 1000);
+    const offLimit = cycles[0].limit;
+    const offDelta = (priorPair && priorPair.off !== null)
+      ? Math.round((offRead - priorPair.off) * 1000) : null;
+
+    tpAnalysis[key] = { offRead, onRead, diff, offDelta, offLimit, addr: g.addr };
   }
 
   if (!Object.keys(tpAnalysis).length) { setMsg('Could not parse on/off pairs.'); return; }
 
-  // Dynamic color scale based on relative off-reads
-  const offValues = Object.values(tpAnalysis).map(t => t.offRead);
-  const minOff = Math.min(...offValues);
-  const maxOff = Math.max(...offValues);
-  const range  = maxOff - minOff || 0.001;
+  // ── THREE-SCORE SYSTEM (matches overview.html logic exactly) ─────────────────
+  // Each pin gets three independent scores; worst score wins.
 
   let matched = 0;
   for (const pin of pins) {
@@ -518,19 +590,63 @@ function applyDataToPoints() {
       }
     }
     if (analysis) {
-      pin.offRead = analysis.offRead;
-      pin.onRead  = analysis.onRead;
-      pin.diff    = analysis.diff;
-      const norm    = (analysis.offRead - minOff) / range; // 0=worst,1=best
-      const lowDiff = analysis.diff < 60;
-      // Both low off AND low diff → always red
-      if (analysis.offRead > -0.500 && lowDiff) { pin.color = 'red'; }
-      else if (norm < 0.25 || (lowDiff && norm < 0.5)) { pin.color = 'red'; }
-      else if (norm < 0.50 || lowDiff) { pin.color = 'orange'; }
-      else if (norm < 0.75) { pin.color = 'yellow'; }
-      else { pin.color = 'green'; }
+      pin.offRead   = analysis.offRead;
+      pin.onRead    = analysis.onRead;
+      pin.diff      = analysis.diff;
+      pin.offDelta  = analysis.offDelta;
+      pin.offLimit  = analysis.offLimit;
+      pin.fluctScore = analysis.fluctScore;
+
+      // 1. THRESHOLD vs lower limit
+      let thresholdScore = 'green';
+      if (pin.offRead !== null && pin.offLimit !== null) {
+        thresholdScore = pin.offRead > pin.offLimit ? 'red' : 'green';
+      } else {
+        thresholdScore = 'unknown'; // resolved below via bottom quartile
+      }
+
+      // 2. CYCLE FLUCTUATION
+      let fluctScore = 'green';
+      const od = analysis.offDelta;
+      if (od !== null) {
+        if      (od >= 35) fluctScore = 'red';
+        else if (od >= 15) fluctScore = 'orange';
+        else if (od >= 10) fluctScore = 'yellow';
+        else               fluctScore = 'green';
+      }
+
+      // 3. ON/OFF DIFFERENTIAL
+      let diffScore = 'green';
+      if (pin.diff !== null) {
+        if      (pin.diff <= 25) diffScore = 'red';
+        else if (pin.diff <= 40) diffScore = 'orange';
+        else if (pin.diff <= 55) diffScore = 'yellow';
+        else                     diffScore = 'green';
+      }
+
+      // Worst score wins
+      const rank = { red:0, orange:1, yellow:2, green:3, unknown:2 };
+      const scores = [thresholdScore, fluctScore, diffScore];
+      const worst  = Math.min(...scores.map(s => rank[s] ?? 2));
+      pin.color          = ['red','orange','yellow','green'][worst];
+      pin.thresholdScore = thresholdScore;
+      pin.fluctScore     = fluctScore;
+      pin.diffScore      = diffScore;
       matched++;
     } else { pin.color = 'none'; }
+  }
+
+  // Bottom quartile for pins with no lower limit
+  const noLimitPins = pins.filter(p => p.offRead !== null && (p.offLimit === null || p.offLimit === undefined));
+  if (noLimitPins.length) {
+    const offs   = noLimitPins.map(p => p.offRead).sort((a,b) => b - a);
+    const cutoff = offs[Math.floor(offs.length * 0.25)];
+    for (const p of noLimitPins) {
+      if (p.offRead >= cutoff && p.color !== 'red' && p.color !== 'orange') {
+        p.color = 'orange';
+        p.bottomQuartile = true;
+      }
+    }
   }
 
   // Parse rectifier reads from data
@@ -645,27 +761,53 @@ function drawOverlay() {
   }
 }
 
-// ── COLOR REASON TEXT ────────────────────────────────────────────────────────
+// ── COLOR REASON TEXT — three-score system ────────────────────────────────────
 function colorReason(pin) {
-  if (pin.color === 'none' || pin.offRead === null) return 'No MV data has been matched to this test point yet.';
-  const offStr  = pin.offRead.toFixed(3) + 'V';
-  const diffStr = pin.diff + 'mV';
-  const lowOff  = pin.offRead > -0.500;
-  const lowDiff = pin.diff < 60;
-  const highDiff = pin.diff > 100;
-  if (pin.color === 'red') {
-    if (lowOff && lowDiff) return `⚠ CRITICAL: Off-read of ${offStr} is among the lowest recorded in this station (least electro-negative), indicating poor cathodic protection. Differential of ${diffStr} is below the 60mV minimum threshold. Both indicators flag this location — possible short or poorly wrapped pipe nearby.`;
-    if (lowDiff) return `⚠ CRITICAL: Differential of ${diffStr} is below the 60mV minimum threshold, indicating insufficient current is reaching this location. Possible short drawing current away from this area.`;
-    return `⚠ CRITICAL: Off-read of ${offStr} is among the lowest in the station. This location has the least electro-negative potential, indicating it is at highest risk and likely closest to a fault or short.`;
+  if (pin.color === 'none' || pin.offRead === null) return 'No MV data has been matched to this test point yet. Upload a spreadsheet and click Apply Data.';
+
+  const offStr  = pin.offRead.toFixed(3) + 'V (' + Math.round(pin.offRead*1000) + 'mV)';
+  const limStr  = pin.offLimit != null ? pin.offLimit.toFixed(3) + 'V' : 'not available';
+  const diffStr = pin.diff != null ? pin.diff + 'mV' : '—';
+
+  const parts = [];
+
+  // POD override
+  if (pin.isPOD || pin.isPODSuspected) {
+    return `<b style="color:var(--green-solid)">✓ POINT OF DRAINAGE (POD):</b> This test point is closest to the rectifier. Off-read of ${offStr} and ON/OFF gap of ${diffStr} are consistent with expected POD behavior — high polarization near the current source is normal and expected.`;
   }
-  if (pin.color === 'orange') {
-    if (lowDiff) return `⚠ CONCERN: Differential of ${diffStr} is low (below 60mV), suggesting current is not effectively reaching this pipe. Off-read of ${offStr} is also below station average.`;
-    return `⚠ CONCERN: Off-read of ${offStr} is below station average. This location has below-average cathodic protection — monitor closely and investigate if reads worsen.`;
+
+  // 1. THRESHOLD
+  if (pin.offLimit != null) {
+    if (pin.thresholdScore === 'red') {
+      parts.push(`<b style="color:var(--red-solid)">⚠ FAILING THRESHOLD:</b> Off-read of ${offStr} does not meet the lower limit of ${limStr}. The pipe at this location is not receiving adequate cathodic protection — this is a failing read per station criteria.`);
+    } else {
+      parts.push(`<b style="color:var(--green-solid)">✓ THRESHOLD PASSING:</b> Off-read of ${offStr} meets the lower limit of ${limStr}.`);
+    }
+  } else if (pin.bottomQuartile) {
+    parts.push(`<b style="color:var(--orange-solid)">△ BOTTOM QUARTILE:</b> Off-read of ${offStr} falls in the bottom 25% of station readings. No lower limit available for this test point — flagged for monitoring.`);
   }
-  if (pin.color === 'yellow') {
-    return `⛁ MONITOR: Off-read of ${offStr} is marginal. Protection is present but not strong. Differential of ${diffStr} is ${highDiff ? 'healthy' : 'acceptable'}. Keep an eye on this location in future surveys.`;
+
+  // 2. CYCLE FLUCTUATION
+  const od = pin.offDelta;
+  if (od != null) {
+    if (od >= 35)      parts.push(`<b style="color:var(--red-solid)">⚠ SIGNIFICANT DROP:</b> Off-read dropped ${od}mV since last survey. A drop of 35mV or more is a red flag — rapidly deteriorating protection or developing fault nearby.`);
+    else if (od >= 15) parts.push(`<b style="color:var(--orange-solid)">⚠ MODERATE DROP:</b> Off-read dropped ${od}mV since last survey cycle. 15-35mV drop warrants monitoring — investigate if trend continues.`);
+    else if (od >= 10) parts.push(`<b style="color:var(--yellow-solid)">△ MINOR DROP:</b> Off-read dropped ${od}mV since last survey (10-15mV range) — watch for continued downward trend.`);
+    else if (od < -10) parts.push(`<b style="color:var(--green-solid)">★ IMPROVING:</b> Off-read improved ${Math.abs(od)}mV since last survey — protection is trending in the right direction.`);
+    else               parts.push(`<b style="color:var(--green-solid)">→ STABLE:</b> Off-read changed less than 10mV since last survey. No meaningful fluctuation detected.`);
+  } else {
+    parts.push(`<b style="color:var(--text-muted)">— CYCLE COMPARISON:</b> No prior survey cycle available for comparison.`);
   }
-  return `✓ ACCEPTABLE: Off-read of ${offStr} indicates good cathodic protection at this location. Differential of ${diffStr} is within normal range (60-100mV+). No immediate concern.`;
+
+  // 3. ON/OFF DIFFERENTIAL
+  if (pin.diff != null) {
+    if      (pin.diff <= 25) parts.push(`<b style="color:var(--red-solid)">⚠ CRITICAL DIFFERENTIAL:</b> ON/OFF gap of ${diffStr} is critically low (25mV or less). Rectifier current is barely polarizing the pipe — a short circuit nearby may be drawing current away from this location.`);
+    else if (pin.diff <= 40) parts.push(`<b style="color:var(--orange-solid)">⚠ LOW DIFFERENTIAL:</b> ON/OFF gap of ${diffStr} is low (26-40mV). Insufficient polarization — investigate bonds and current flow.`);
+    else if (pin.diff <= 55) parts.push(`<b style="color:var(--yellow-solid)">△ MARGINAL DIFFERENTIAL:</b> ON/OFF gap of ${diffStr} is marginal (41-55mV). Current is reaching the pipe but below the 55mV optimal threshold — monitor for continued decline.`);
+    else                     parts.push(`<b style="color:var(--green-solid)">✓ HEALTHY DIFFERENTIAL:</b> ON/OFF gap of ${diffStr} is above 55mV — current is effectively polarizing the pipe.`);
+  }
+
+  return parts.join('<br><br>') || 'No scoring data available.';
 }
 
 function renderSidebar() {
@@ -746,15 +888,42 @@ function pinAtXY(cx, cy) {
   return null;
 }
 
-// ── HOVER TOOLTIP ─────────────────────────────────────────────────────────────
+// ── HOVER TOOLTIP + DRAG ──────────────────────────────────────────────────────
 const tooltip = document.getElementById('map-tooltip');
+
+overlayCanvas.addEventListener('mousedown', (e) => {
+  if (mode !== 'drag') return;
+  const rect = overlayCanvas.getBoundingClientRect();
+  const cx = e.clientX - rect.left;
+  const cy = e.clientY - rect.top;
+  const pin = pinAtXY(cx, cy);
+  if (pin) {
+    dragPin   = pin;
+    isDragging = true;
+    dragOffX  = cx - pin.x * scale;
+    dragOffY  = cy - pin.y * scale;
+    overlayCanvas.style.cursor = 'grabbing';
+    e.preventDefault();
+  }
+});
+
 overlayCanvas.addEventListener('mousemove', (e) => {
   const rect = overlayCanvas.getBoundingClientRect();
   const cx   = e.clientX - rect.left;
   const cy   = e.clientY - rect.top;
-  const pin  = pinAtXY(cx, cy);
+
+  // Handle active drag
+  if (isDragging && dragPin) {
+    dragPin.x = (cx - dragOffX) / scale;
+    dragPin.y = (cy - dragOffY) / scale;
+    drawOverlay();
+    tooltip.style.display = 'none';
+    return;
+  }
+
+  const pin = pinAtXY(cx, cy);
   if (pin) {
-    overlayCanvas.style.cursor = 'pointer';
+    overlayCanvas.style.cursor = mode === 'drag' ? 'grab' : 'pointer';
     document.getElementById('tt-name').textContent = pin.tpNum + ' — ' + pin.address;
     document.getElementById('tt-reads').innerHTML = pin.offRead !== null
       ? 'Off: ' + pin.offRead.toFixed(3) + 'V | On: ' + pin.onRead.toFixed(3) + 'V | Δ' + pin.diff + 'mV'
@@ -763,18 +932,41 @@ overlayCanvas.addEventListener('mousemove', (e) => {
     tooltip.style.left = (e.clientX + 14) + 'px';
     tooltip.style.top  = (e.clientY - 10) + 'px';
   } else {
-    overlayCanvas.style.cursor = mode === 'place' ? 'crosshair' : 'default';
+    overlayCanvas.style.cursor = mode === 'place' ? 'crosshair' : mode === 'drag' ? 'grab' : mode === 'rect' ? 'crosshair' : 'default';
     tooltip.style.display = 'none';
   }
 });
-overlayCanvas.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+
+overlayCanvas.addEventListener('mouseup', (e) => {
+  if (isDragging && dragPin) {
+    savePins();
+    detectPOD();
+    renderSidebar();
+    setMsg('Pin repositioned: ' + dragPin.tpNum);
+  }
+  dragPin    = null;
+  isDragging = false;
+  overlayCanvas.style.cursor = mode === 'drag' ? 'grab' : mode === 'place' ? 'crosshair' : 'default';
+});
+
+overlayCanvas.addEventListener('mouseleave', () => {
+  tooltip.style.display = 'none';
+  if (isDragging && dragPin) {
+    savePins(); detectPOD(); renderSidebar();
+  }
+  dragPin = null; isDragging = false;
+});
 
 // ── CLICK: place pin OR show detail ──────────────────────────────────────────
 overlayCanvas.addEventListener('click', (e) => {
+  // Ignore click if we just finished a drag
+  if (isDragging) return;
   const rect = overlayCanvas.getBoundingClientRect();
   const cx   = e.clientX - rect.left;  // logical CSS pixels
   const cy   = e.clientY - rect.top;
   const pin  = pinAtXY(cx, cy);
+  // In drag mode, don't open detail popup on click
+  if (mode === 'drag') return;
   if (pin) {
     showDetail(pin, e);
     return;
@@ -1028,6 +1220,7 @@ function closeEditModal() {
 }
 
 loadPins(); loadRectifier(); renderSidebar(); drawOverlay(); updateRectPanel(); setMode('place');
+restorePDF();
 </script>
 </body>
 </html>
