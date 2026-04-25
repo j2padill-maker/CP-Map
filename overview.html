@@ -555,11 +555,27 @@ function analyze(records) {
   }
 
   // Sort: worst first within each color group
+  // Priority 1: Color group (red first)
+  // Priority 2: Worst off-read first (highest numeric = least negative = worst protection)
+  //             e.g. -0.440V sorts before -0.480V because -0.440 > -0.480 numerically
+  // Priority 3: Tiebreaker on equal off-reads — lowest differential first (most severe)
+  //             e.g. 40mV gap sorts before 50mV gap (less current = more urgent)
+  // Priority 4: Largest prior cycle drop first
   const rank = { red:0, orange:1, yellow:2, green:3 };
   points.sort((a,b) => {
+    // 1. Color group
     if (rank[a.color] !== rank[b.color]) return rank[a.color] - rank[b.color];
-    // Within same color: worst off-read first (most positive = worst)
-    return (b.offRead ?? -999) - (a.offRead ?? -999);
+    // 2. Worst off-read first (b - a puts higher numeric value first)
+    const aOff = a.offRead ?? -999;
+    const bOff = b.offRead ?? -999;
+    const offDiff = Math.round((bOff - aOff) * 1000); // in mV for precision
+    if (Math.abs(offDiff) > 1) return offDiff; // >1mV difference = meaningfully different
+    // 3. Equal off-reads: lowest differential first (worst current situation)
+    const aDiff = a.diff ?? 9999;
+    const bDiff = b.diff ?? 9999;
+    if (aDiff !== bDiff) return aDiff - bDiff;
+    // 4. Largest prior cycle drop first
+    return (b.offDelta ?? 0) - (a.offDelta ?? 0);
   });
 
   return { points, rectRecords };
@@ -787,28 +803,7 @@ function renderDetail(p) {
     </div>`;
 }
 
-function buildExplanation(p) {
-  const off = p.offRead !== null ? p.offRead.toFixed(3)+'V' : '—';
-  const diff = p.diff !== null ? p.diff+'mV' : '—';
-  const lowDiff = p.diff !== null && p.diff < 60;
-  const lowOff  = p.offRead !== null && p.offRead > -0.500;
-  const dropNote = p.drops.filter(d => d.type === 'off' && d.mvDrop >= 35).map(d =>
-    ` A drop of ${d.mvDrop}mV was recorded on ${d.date} in the off-read.`).join('');
 
-  if (p.color === 'red') {
-    if (lowOff && lowDiff) return `<b style="color:var(--red)">⚠ CRITICAL:</b> Off-read of ${off} is among the lowest recorded in this station, indicating poor cathodic protection at this location. The ON/OFF gap of ${diff} is also below the 60mV minimum threshold, meaning insufficient current is reaching this pipe. Both conditions together strongly indicate a nearby fault, short circuit, or severely deteriorated pipe coating.${dropNote}`;
-    if (lowDiff) return `<b style="color:var(--red)">⚠ CRITICAL:</b> The ON/OFF gap of ${diff} is critically low — below the 60mV minimum acceptable threshold. This means the rectifier current is not effectively polarizing the pipe at this location. A short circuit nearby may be drawing current away from this test point.${dropNote}`;
-    return `<b style="color:var(--red)">⚠ CRITICAL:</b> Off-read of ${off} is the lowest recorded in this station survey, indicating this location has the least electrochemical protection. This test point is the highest priority for investigation — begin troubleshooting nearest to this address.${dropNote}`;
-  }
-  if (p.color === 'orange') {
-    return `<b style="color:var(--orange)">⚠ HIGH CONCERN:</b> Off-read of ${off} is below the station average, indicating below-average cathodic protection at this location. ${lowDiff ? `The ON/OFF gap of ${diff} is also low, suggesting current flow issues. ` : ''}This location warrants close attention and follow-up testing. If reads worsen in the next cycle, escalate to critical.${dropNote}`;
-  }
-  if (p.color === 'yellow') {
-    return `<b style="color:var(--yellow)">△ MONITOR:</b> Off-read of ${off} is marginal — protection is present but below the station average. The ON/OFF gap of ${diff} is ${p.diff >= 60 && p.diff <= 100 ? 'within acceptable range' : 'acceptable'}. No immediate action required but monitor closely across future survey cycles for any downward trend.${dropNote}`;
-  }
-  if (p.isPOD) return `<b style="color:var(--green)">✓ POINT OF DRAINAGE (POD):</b> This test point is in close proximity to the rectifier. Off-read of ${off} and ON/OFF gap of ${diff} are consistent with expected POD behavior — high polarization near the current source is normal and healthy. No concern at this time.`;
-  return `<b style="color:var(--green)">✓ PASSING:</b> Off-read of ${off} indicates good cathodic protection at this location. The ON/OFF gap of ${diff} is within normal range. No concern at this time.${dropNote}`;
-}
 
 function buildCycleHistory(p) {
   if (!p.cycles.length) return '<div style="font-size:10px;color:var(--text-muted)">No cycle data</div>';
