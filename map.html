@@ -517,13 +517,24 @@ function applyDataToPoints() {
   if (!mvData.length) { setMsg('No spreadsheet loaded.'); return; }
   if (!pins.length)   { setMsg('No pins placed yet.'); return; }
 
-  // Normalize TP key: "TP 1.000" -> "1", "TP 12" -> "12", "12" -> "12"
+  // Normalize helpers
   function normTP(s) {
     return String(s).replace(/TP\s*/i,'').replace('.000','').replace(/\.0+$/,'').trim();
   }
+  // Normalize address for matching: lowercase, collapse whitespace, strip punctuation
+  function normAddr(s) {
+    return String(s).toLowerCase().replace(/[.,#]/g,'').replace(/\s+/g,' ').trim();
+  }
+  // Street number + first word of street name — enough to uniquely identify most addresses
+  function addrKey(s) {
+    const parts = normAddr(s).split(' ');
+    return parts.slice(0, 2).join(' '); // e.g. "4265 marzo"
+  }
 
-  // Group by TP point, collect reads with dates
-  const groups = {};
+  // Group rows by normalized address (primary) — also track tp number as fallback key
+  const groups = {};      // keyed by normAddr
+  const tpToAddr = {};    // normTP -> normAddr, for fallback lookup
+
   for (const row of mvData) {
     const point   = String(row['Point']    || '').trim();
     const addr    = String(row['Location'] || row['Address'] || '').trim();
@@ -533,15 +544,25 @@ function applyDataToPoints() {
     const limitStr = String(row['Lower Limit'] || row['LowerLimit'] || '').replace(/[Vv]/g,'').trim();
     const limit   = parseFloat(limitStr);
     if (!point || isNaN(read) || point.toUpperCase().startsWith('R ')) continue;
-    const key = normTP(point);
-    if (!groups[key]) groups[key] = { addr, reads: [] };
-    groups[key].reads.push({ read, date, limit: isNaN(limit) ? null : limit });
+
+    const ak = addrKey(addr);   // primary key
+    const tk = normTP(point);   // secondary key
+    if (!ak) continue;
+
+    if (!groups[ak]) groups[ak] = { addr, tp: tk, reads: [] };
+    groups[ak].reads.push({ read, date, limit: isNaN(limit) ? null : limit });
+    if (tk) tpToAddr[tk] = ak;  // register tp→addr mapping
   }
 
-  // Isolate latest two cycles per TP, compute on/off/diff/delta/offLimit
-  const tpAnalysis = {};
-  for (const [key, g] of Object.entries(groups)) {
-    // Sort by date desc, group into date buckets
+  // Build analysis keyed by addrKey
+  const tpAnalysis = {};  // addrKey -> analysis object
+
+  function cycleOffOn(c) {
+    if (c.reads.length < 2) return null;
+    return { off: Math.max(...c.reads), on: Math.min(...c.reads) };
+  }
+
+  for (const [ak, g] of Object.entries(groups)) {
     const byDate = {};
     for (const r of g.reads) {
       const dk = r.date.toDateString();
@@ -551,11 +572,6 @@ function applyDataToPoints() {
     }
     const cycles = Object.values(byDate).sort((a,b) => b.date - a.date);
     if (!cycles.length) continue;
-
-    function cycleOffOn(c) {
-      if (c.reads.length < 2) return null;
-      return { off: Math.max(...c.reads), on: Math.min(...c.reads) };
-    }
 
     const latestPair = cycleOffOn(cycles[0]);
     if (!latestPair) continue;
@@ -568,7 +584,7 @@ function applyDataToPoints() {
     const offDelta = (priorPair && priorPair.off !== null)
       ? Math.round((offRead - priorPair.off) * 1000) : null;
 
-    tpAnalysis[key] = { offRead, onRead, diff, offDelta, offLimit, addr: g.addr };
+    tpAnalysis[ak] = { offRead, onRead, diff, offDelta, offLimit, addr: g.addr, tp: g.tp };
   }
 
   if (!Object.keys(tpAnalysis).length) { setMsg('Could not parse on/off pairs.'); return; }
@@ -577,16 +593,26 @@ function applyDataToPoints() {
   // Each pin gets three independent scores; worst score wins.
 
   let matched = 0;
+  let unmatched = [];
+
   for (const pin of pins) {
-    // Match by normalized TP number first
-    let analysis = tpAnalysis[normTP(pin.tpNum)];
-    // Fallback: address substring match
+    // 1. PRIMARY: match by normalized address key
+    let analysis = tpAnalysis[addrKey(pin.address)];
+
+    // 2. FALLBACK: match by TP number → look up its registered address key
     if (!analysis) {
-      const w = pin.address.toLowerCase().split(' ').slice(0,2).join(' ');
-      for (const [,v] of Object.entries(tpAnalysis)) {
-        if (v.addr.toLowerCase().includes(w) || w.includes(v.addr.toLowerCase().split(' ').slice(0,2).join(' '))) {
-          analysis = v; break;
-        }
+      const ak = tpToAddr[normTP(pin.tpNum)];
+      if (ak) analysis = tpAnalysis[ak];
+    }
+
+    // 3. LAST RESORT: loose partial address scan (catches abbreviations like "St" vs "Street")
+    if (!analysis) {
+      const pinWords = normAddr(pin.address).split(' ').filter(w => w.length > 3);
+      for (const [ak, v] of Object.entries(tpAnalysis)) {
+        const sheetWords = normAddr(v.addr).split(' ');
+        // If 2+ meaningful words overlap, treat as a match
+        const overlap = pinWords.filter(w => sheetWords.includes(w));
+        if (overlap.length >= 2) { analysis = v; break; }
       }
     }
     if (analysis) {
@@ -633,7 +659,10 @@ function applyDataToPoints() {
       pin.fluctScore     = fluctScore;
       pin.diffScore      = diffScore;
       matched++;
-    } else { pin.color = 'none'; }
+    } else {
+      pin.color = 'none';
+      unmatched.push(pin.tpNum + ' (' + pin.address + ')');
+    }
   }
 
   // Bottom quartile for pins with no lower limit
@@ -667,7 +696,10 @@ function applyDataToPoints() {
   updateRectPanel();
   savePins(); drawOverlay(); renderSidebar();
   detectPOD();
-  setMsg(`Applied — ${matched} of ${pins.length} pins colored.`);
+  const unmatchedMsg = unmatched.length
+    ? ` | ⚠ ${unmatched.length} unmatched: ${unmatched.join(', ')}`
+    : ' | All pins matched ✓';
+  setMsg(`Applied — ${matched} of ${pins.length} pins colored.${unmatchedMsg}`);
 }
 
 const COLORS = {
