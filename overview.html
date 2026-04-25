@@ -190,6 +190,8 @@
 <script>
 // ── STATE ─────────────────────────────────────────────────────────────────────
 let rawData = [];
+const DATA_KEY   = 'cp409_surveyData';
+const FNAME_KEY  = 'cp409_surveyFileName';
 
 // ── FILE HANDLING ─────────────────────────────────────────────────────────────
 function handleFile(input) {
@@ -206,6 +208,14 @@ function handleFile(input) {
       // Read with header:1 to get raw arrays so we can detect column positions
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
       rawData = rows;
+      // Persist data so it survives tab navigation
+      try {
+        localStorage.setItem(DATA_KEY,  JSON.stringify(rows));
+        localStorage.setItem(FNAME_KEY, file.name);
+      } catch(e) {
+        // Storage quota exceeded — data too large, skip persistence
+        console.warn('Could not persist survey data:', e);
+      }
       setMsg(`Loaded ${rows.length} rows — click Analyze Data`);
     } catch(err) { setMsg('Error reading file: ' + err.message); }
   };
@@ -848,6 +858,44 @@ function toggleCard(detailId, tp) {
 }
 
 function setMsg(msg) { document.getElementById('upload-msg').textContent = msg; }
+
+// ── CLEAR DATA ────────────────────────────────────────────────────────────────
+function clearData() {
+  rawData = [];
+  try {
+    localStorage.removeItem(DATA_KEY);
+    localStorage.removeItem(FNAME_KEY);
+  } catch(e) {}
+  document.getElementById('file-name').textContent   = 'No file loaded';
+  document.getElementById('upload-zone').classList.remove('has-file');
+  document.getElementById('summary-row').style.display = 'none';
+  document.getElementById('overview-content').innerHTML = `
+    <div class="empty-state">
+      <div class="es-icon">📊</div>
+      <p>Upload a survey spreadsheet to see analysis</p>
+    </div>`;
+  setMsg('Data cleared — upload a new spreadsheet to begin.');
+}
+
+// ── AUTO-LOAD ON STARTUP ──────────────────────────────────────────────────────
+(function initData() {
+  try {
+    const saved = localStorage.getItem(DATA_KEY);
+    const fname = localStorage.getItem(FNAME_KEY);
+    if (saved) {
+      rawData = JSON.parse(saved);
+      if (fname) {
+        document.getElementById('file-name').textContent = fname + ' (cached)';
+        document.getElementById('upload-zone').classList.add('has-file');
+      }
+      setMsg(`Cached data loaded (${rawData.length} rows) — click Analyze Data or upload new file.`);
+      // Auto-analyze so results show immediately on return
+      parseAndRender();
+    }
+  } catch(e) {
+    rawData = [];
+  }
+})();
 </script>
 </body>
 </html>
