@@ -449,8 +449,15 @@ async function restorePDF() {
 async function renderPDF() {
   if (!pdfPage) return;
 
-  // Render at 2x resolution for crisp text and lines at all zoom levels
-  const quality = 2;
+  // Cancel any in-progress render to avoid stacking render tasks
+  if (renderPDF._task) { try { renderPDF._task.cancel(); } catch(e) {} }
+
+  // Scale render quality with zoom level so text stays crisp when zoomed in.
+  // At low zoom we use 2x; at high zoom we match the zoom so PDF.js draws
+  // native pixels rather than stretched ones. Cap at 5x to avoid OOM.
+  const dpr     = window.devicePixelRatio || 1;
+  const quality = Math.min(Math.max(dpr, scale * dpr), 5);
+
   const vpHiRes = pdfPage.getViewport({ scale: scale * quality });
   const vpLogic = pdfPage.getViewport({ scale });
 
@@ -466,8 +473,14 @@ async function renderPDF() {
   overlayCanvas.style.width  = vpLogic.width  + 'px';
   overlayCanvas.style.height = vpLogic.height + 'px';
 
-  await pdfPage.render({ canvasContext: mapCtx, viewport: vpHiRes }).promise;
-  drawOverlay();
+  const task = pdfPage.render({ canvasContext: mapCtx, viewport: vpHiRes });
+  renderPDF._task = task;
+  try {
+    await task.promise;
+    drawOverlay();
+  } catch(e) {
+    if (e?.name !== 'RenderingCancelledException') console.warn('PDF render error:', e);
+  }
 }
 
 function fitPage() {
@@ -478,8 +491,14 @@ function fitPage() {
   document.getElementById('zoom-label').textContent = Math.round(scale * 100) + '%';
   renderPDF();
 }
-function zoomIn()  { scale = Math.min(scale * 1.25, 6);    document.getElementById('zoom-label').textContent = Math.round(scale*100)+'%'; renderPDF(); }
-function zoomOut() { scale = Math.max(scale / 1.25, 0.15); document.getElementById('zoom-label').textContent = Math.round(scale*100)+'%'; renderPDF(); }
+
+let _zoomTimer = null;
+function _debouncedRender() {
+  clearTimeout(_zoomTimer);
+  _zoomTimer = setTimeout(() => renderPDF(), 80);
+}
+function zoomIn()  { scale = Math.min(scale * 1.25, 6);    document.getElementById('zoom-label').textContent = Math.round(scale*100)+'%'; _debouncedRender(); }
+function zoomOut() { scale = Math.max(scale / 1.25, 0.15); document.getElementById('zoom-label').textContent = Math.round(scale*100)+'%'; _debouncedRender(); }
 
 // Click handling moved to overlayCanvas listener below
 
