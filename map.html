@@ -375,7 +375,6 @@ async function idbDel(key) {
 
 let mode = 'place', pins = [], mvData = [];
 let dragPin = null, dragOffX = 0, dragOffY = 0, isDragging = false;
-let renderQuality = 2; // updated each render, used by drawOverlay + hit-test
 let rectifier = null; // {x, y, address, volt, amp}
 const RECT_KEY = 'cp409_rectifier';
 let pdfDoc = null, pdfPage = null, scale = 1.0, pendingXY = null;
@@ -457,11 +456,7 @@ async function renderPDF() {
   // At low zoom we use 2x; at high zoom we match the zoom so PDF.js draws
   // native pixels rather than stretched ones. Cap at 5x to avoid OOM.
   const dpr     = window.devicePixelRatio || 1;
-  // Always render at minimum 2x for baseline sharpness.
-  // As zoom increases beyond 1.0, add more resolution proportionally.
-  // Cap at 4x to avoid excessive memory use.
   const quality = Math.min(Math.max(2, scale * 2 * dpr), 4);
-  renderQuality = quality;
 
   const vpHiRes = pdfPage.getViewport({ scale: scale * quality });
   const vpLogic = pdfPage.getViewport({ scale });
@@ -769,10 +764,12 @@ const COLORS = {
 };
 
 function drawOverlay() {
-  const q = renderQuality;
+  // Compute the physical-to-CSS ratio directly from canvas dimensions.
+  // This is always correct regardless of when drawOverlay is called.
+  const cssW = parseFloat(overlayCanvas.style.width)  || overlayCanvas.width;
+  const cssH = parseFloat(overlayCanvas.style.height) || overlayCanvas.height;
+  const q    = overlayCanvas.width / cssW;   // physical px per CSS px
   overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-  // The overlay canvas is physically q× larger than CSS pixels.
-  // Apply transform so all drawing uses logical CSS-pixel coordinates.
   overlayCtx.setTransform(q, 0, 0, q, 0, 0);
   // Scale context by quality so coordinates match logical pixel space
   overlayCtx.setTransform(quality, 0, 0, quality, 0, 0);
