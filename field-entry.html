@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CP Scout — Field Entry</title>
+<style>
+:root {
+  --bg:          #3a3f44;
+  --surface:     #2e3338;
+  --panel:       #4a5058;
+  --panel-light: #555c64;
+  --border:      #6a737d;
+  --teal:        #4dd9e8;
+  --teal-dim:    #2aabb8;
+  --teal-dark:   #1a8090;
+  --text:        #f0f4f5;
+  --text-dim:    #c0cdd0;
+  --text-muted:  #8a9ea3;
+  --red:         #f04040;
+  --orange:      #f08020;
+  --yellow:      #e8d020;
+  --green:       #30c860;
+  --blue:        #4da6ff;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'Courier New', monospace; min-height: 100vh; display: flex; flex-direction: column; }
+
+/* NAV */
+nav { background: var(--surface); border-bottom: 2px solid var(--teal-dark); display: flex; align-items: center; padding: 0 16px; flex-shrink: 0; height: 48px; }
+.nav-brand .nav-logo { font-size: 14px; font-weight: bold; color: var(--teal); letter-spacing: 2px; text-transform: uppercase; text-shadow: 0 0 10px rgba(77,217,232,0.4); white-space: nowrap; }
+.nav-tabs { display: flex; gap: 2px; flex: 1; margin-left: 20px; }
+.nav-tab { padding: 0 16px; height: 48px; display: flex; align-items: center; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; color: var(--text-dim); border-bottom: 3px solid transparent; text-decoration: none; transition: all .15s; white-space: nowrap; }
+.nav-tab:hover { color: var(--teal); background: rgba(77,217,232,0.05); }
+.nav-tab.active { color: var(--teal); border-bottom-color: var(--teal); font-weight: bold; }
+
+/* PAGE LAYOUT */
+.page { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+
+/* SECTION BLOCKS */
+.section-block { background: var(--surface); border: 1px solid var(--border); }
+.section-title { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--panel); }
+.section-title h2 { font-size: 11px; letter-spacing: 2px; color: var(--teal); text-transform: uppercase; font-weight: bold; flex: 1; }
+.section-title .sec-badge { font-size: 9px; padding: 2px 8px; letter-spacing: 1px; text-transform: uppercase; border: 1px solid; }
+.section-body { padding: 14px; }
+
+/* FORM GRID */
+.form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+.form-grid-wide { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.form-field { display: flex; flex-direction: column; gap: 4px; }
+.form-field label { font-size: 9px; letter-spacing: 1px; color: var(--text-muted); text-transform: uppercase; }
+.form-field input, .form-field select {
+  background: var(--panel); border: 1px solid var(--border); color: var(--text);
+  padding: 7px 10px; font-size: 11px; font-family: inherit;
+  transition: border-color .15s;
+}
+.form-field input:focus, .form-field select:focus { outline: none; border-color: var(--teal); }
+.form-field input::placeholder { color: var(--text-muted); }
+.form-field .field-hint { font-size: 9px; color: var(--text-muted); margin-top: 2px; }
+
+/* BUTTONS */
+.btn { padding: 8px 18px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; font-family: inherit; font-weight: bold; border: 1px solid; transition: all .15s; }
+.btn-teal  { background: var(--teal-dark); border-color: var(--teal); color: #fff; }
+.btn-teal:hover { background: var(--teal-dim); }
+.btn-panel { background: var(--panel); border-color: var(--border); color: var(--text-dim); }
+.btn-panel:hover { border-color: var(--teal); color: var(--teal); }
+.btn-danger { background: rgba(240,64,64,0.15); border-color: var(--red); color: var(--red); }
+.btn-danger:hover { background: rgba(240,64,64,0.25); }
+.btn-row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; align-items: center; }
+
+/* RESULT DISPLAY */
+.calc-result { background: var(--panel); border: 1px solid var(--border); padding: 12px 16px; margin-top: 14px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+.calc-result .cr-label { font-size: 9px; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; }
+.calc-result .cr-value { font-size: 22px; font-weight: bold; margin-top: 2px; }
+.calc-result .cr-block { display: flex; flex-direction: column; }
+.calc-result .cr-color-badge { padding: 4px 14px; font-size: 11px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; border: 2px solid; margin-top: 2px; display: inline-block; }
+
+/* COLOR SCALE LEGEND */
+.scale-legend { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.scale-item { display: flex; align-items: center; gap: 6px; font-size: 9px; color: var(--text-dim); letter-spacing: 1px; padding: 4px 8px; border: 1px solid var(--border); background: var(--panel); }
+.scale-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+/* RESULTS TABLE */
+.results-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+.results-table th { background: var(--panel); color: var(--text-muted); font-size: 9px; letter-spacing: 1px; text-transform: uppercase; padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.results-table td { padding: 8px 10px; border-bottom: 1px solid rgba(106,115,125,0.3); vertical-align: middle; }
+.results-table tr:hover td { background: rgba(77,217,232,0.04); }
+.results-table .type-badge { font-size: 9px; padding: 2px 7px; letter-spacing: 1px; text-transform: uppercase; border: 1px solid var(--border); color: var(--text-muted); }
+.results-table .type-bond { border-color: var(--teal-dim); color: var(--teal); }
+.results-table .type-drop { border-color: var(--orange); color: var(--orange); }
+.color-pill { display: inline-block; padding: 2px 10px; font-size: 9px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; border: 1px solid; }
+.empty-state { text-align: center; padding: 32px; color: var(--text-muted); font-size: 11px; letter-spacing: 1px; }
+
+/* RECTIFIER SUMMARY BAR */
+.rect-bar { display: flex; gap: 20px; flex-wrap: wrap; align-items: center; }
+.rect-stat { display: flex; flex-direction: column; gap: 2px; }
+.rect-stat .rs-label { font-size: 9px; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; }
+.rect-stat .rs-value { font-size: 18px; font-weight: bold; color: var(--teal); }
+.rect-stat .rs-unit  { font-size: 10px; color: var(--text-muted); }
+
+/* DIVIDER */
+.divider { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+
+/* COLLAPSIBLE */
+.collapsible-header { display: flex; align-items: center; justify-content: space-between; cursor: pointer; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--panel); user-select: none; }
+.collapsible-header h2 { font-size: 11px; letter-spacing: 2px; color: var(--teal); text-transform: uppercase; font-weight: bold; }
+.collapsible-body { padding: 14px; }
+.toggle-icon { color: var(--text-muted); font-size: 12px; transition: transform .2s; }
+.toggle-icon.open { transform: rotate(180deg); }
+
+/* STATUS BAR */
+.status-bar { background: var(--surface); border-top: 1px solid var(--border); padding: 6px 16px; font-size: 10px; color: var(--text-muted); letter-spacing: 1px; display: flex; gap: 20px; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-brand">
+    <div class="nav-logo">⚡ CP Scout</div>
+  </div>
+  <div class="nav-tabs">
+    <a class="nav-tab" href="overview.html">📊 Overview</a>
+    <a class="nav-tab" href="map.html">🗺️ Map</a>
+    <a class="nav-tab" href="trends.html">📈 Trends</a>
+    <a class="nav-tab active" href="field-entry.html">📋 Field Entry</a>
+    <a class="nav-tab" href="report.html">📄 Report</a>
+  </div>
+</nav>
+
+<div class="page">
+
+  <!-- ── SECTION 1: RECTIFIER ─────────────────────────────────────── -->
+  <div class="section-block">
+    <div class="collapsible-header" onclick="toggleSection('rect-body','rect-icon')">
+      <h2>⚡ Rectifier Entry</h2>
+      <span class="toggle-icon open" id="rect-icon">▲</span>
+    </div>
+    <div class="collapsible-body" id="rect-body">
+      <div class="form-grid">
+        <div class="form-field">
+          <label>Total Amp Output (A)</label>
+          <input type="number" id="rect-amps" placeholder="e.g. 7.0" step="0.01" oninput="saveRectifier()">
+        </div>
+        <div class="form-field">
+          <label>Voltage Output (V)</label>
+          <input type="number" id="rect-volts" placeholder="e.g. 3.6" step="0.01" oninput="saveRectifier()">
+        </div>
+        <div class="form-field">
+          <label>Date</label>
+          <input type="date" id="rect-date" oninput="saveRectifier()">
+        </div>
+        <div class="form-field">
+          <label>Time</label>
+          <input type="time" id="rect-time" oninput="saveRectifier()">
+        </div>
+        <div class="form-field">
+          <label>Technician</label>
+          <input type="text" id="rect-tech" placeholder="Name or ID" oninput="saveRectifier()">
+        </div>
+        <div class="form-field">
+          <label>Notes</label>
+          <input type="text" id="rect-notes" placeholder="Optional" oninput="saveRectifier()">
+        </div>
+      </div>
+      <div id="rect-summary" style="display:none; margin-top:14px;">
+        <div class="rect-bar" id="rect-bar"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECTION 2: BOND CHECK ────────────────────────────────────── -->
+  <div class="section-block">
+    <div class="collapsible-header" onclick="toggleSection('bond-body','bond-icon')">
+      <h2>🔗 Bond Check Entry</h2>
+      <span class="toggle-icon open" id="bond-icon">▲</span>
+    </div>
+    <div class="collapsible-body" id="bond-body">
+      <div class="form-grid-wide">
+        <div class="form-field">
+          <label>Address / Location</label>
+          <input type="text" id="bc-address" placeholder="e.g. Palm Ave & Norstad St">
+        </div>
+        <div class="form-field">
+          <label>Amp Reading (A)</label>
+          <input type="number" id="bc-amps" placeholder="e.g. 0.79" step="0.01">
+        </div>
+        <div class="form-field">
+          <label>Proximity to Rectifier — optional</label>
+          <select id="bc-proximity">
+            <option value="1.3">Near — within 1-2 blocks</option>
+            <option value="1.0" selected>Mid — moderate distance</option>
+            <option value="0.7">Far — end of station</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Historic Amp Reading (A) <span style="color:var(--text-muted)">— optional</span></label>
+          <input type="number" id="bc-hist-amps" placeholder="e.g. 0.45" step="0.01">
+        </div>
+        <div class="form-field">
+          <label>Historic Rectifier Output (A) <span style="color:var(--text-muted)">— optional</span></label>
+          <input type="number" id="bc-hist-rect" placeholder="e.g. 7.0" step="0.01">
+        </div>
+        <div class="form-field">
+          <label>Notes</label>
+          <input type="text" id="bc-notes" placeholder="Optional">
+        </div>
+      </div>
+
+      <!-- Live result -->
+      <div class="calc-result" id="bc-result" style="display:none;">
+        <div class="cr-block">
+          <span class="cr-label">Amp Reading</span>
+          <span class="cr-value" id="bc-res-amps" style="color:var(--teal)">—</span>
+        </div>
+        <div class="cr-block">
+          <span class="cr-label">Expected Range</span>
+          <span class="cr-value" id="bc-res-expected" style="font-size:14px; color:var(--text-dim)">—</span>
+        </div>
+        <div class="cr-block">
+          <span class="cr-label">Anomaly Ratio</span>
+          <span class="cr-value" id="bc-res-ratio" style="font-size:16px;">—</span>
+        </div>
+        <div class="cr-block">
+          <span class="cr-label">Historic Delta</span>
+          <span class="cr-value" id="bc-res-hist" style="font-size:14px; color:var(--text-dim)">—</span>
+        </div>
+        <div class="cr-block">
+          <span class="cr-label">Status</span>
+          <span class="cr-color-badge" id="bc-res-badge">—</span>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-teal" onclick="calcBondCheck()">▶ Calculate &amp; Add</button>
+        <button class="btn btn-panel" onclick="clearBondForm()">✕ Clear</button>
+      </div>
+
+      <!-- Color scale reference -->
+      <hr class="divider">
+      <div style="font-size:9px; color:var(--text-muted); letter-spacing:1px; text-transform:uppercase; margin-bottom:8px;">Current Anomaly Scale</div>
+      <div class="scale-legend">
+        <div class="scale-item"><div class="scale-dot" style="background:var(--red)"></div>&gt;2.0× expected — CRITICAL</div>
+        <div class="scale-item"><div class="scale-dot" style="background:var(--orange)"></div>1.5–2.0× — HIGH CONCERN</div>
+        <div class="scale-item"><div class="scale-dot" style="background:var(--yellow)"></div>1.1–1.5× — ELEVATED</div>
+        <div class="scale-item"><div class="scale-dot" style="background:var(--green)"></div>0.6–1.1× — NORMAL</div>
+        <div class="scale-item"><div class="scale-dot" style="background:var(--blue)"></div>0.3–0.6× — LOW</div>
+        <div class="scale-item"><div class="scale-dot" style="background:var(--blue); opacity:0.5"></div>&lt;0.3× — CRITICALLY LOW</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECTION 3: DROP CHECK CALCULATOR ─────────────────────────── -->
+  <div class="section-block">
+    <div class="collapsible-header" onclick="toggleSection('dc-body','dc-icon')">
+      <h2>🔌 Drop Check Calculator</h2>
+      <span class="toggle-icon open" id="dc-icon">▲</span>
+    </div>
+    <div class="collapsible-body" id="dc-body">
+      <div class="form-grid-wide">
+        <div class="form-field">
+          <label>Start Address (Riser 1)</label>
+          <input type="text" id="dc-start" placeholder="e.g. 4265 Marzo St">
+        </div>
+        <div class="form-field">
+          <label>End Address (Riser 2)</label>
+          <input type="text" id="dc-end" placeholder="e.g. Marzo &amp; Kenalan">
+        </div>
+        <div class="form-field">
+          <label>mV Reading from Drop Check</label>
+          <input type="number" id="dc-mv" placeholder="e.g. 25.3" step="0.1">
+          <span class="field-hint">Raw mV reading from multimeter</span>
+        </div>
+        <div class="form-field">
+          <label>Distance Riser to Riser (ft)</label>
+          <input type="number" id="dc-feet" placeholder="e.g. 140" step="1">
+        </div>
+        <div class="form-field">
+          <label>Pipe Size</label>
+          <select id="dc-pipe">
+            <option value="5.2">¾" — 5.2</option>
+            <option value="7.8">1" — 7.8</option>
+            <option value="12.6">1½" — 12.6</option>
+            <option value="16.9" selected>2" — 16.9</option>
+            <option value="26.8">2½" — 26.8</option>
+            <option value="35.1">3" — 35.1</option>
+            <option value="50.0">4" — 50.0</option>
+            <option value="39.9">4" Thin Wall — 39.9</option>
+            <option value="88.0">6" — 88.0</option>
+            <option value="48.8">6" Thin Wall — 48.8</option>
+            <option value="132.0">8" — 132.0</option>
+          </select>
+          <span class="field-hint">Formula: mV × constant ÷ footage</span>
+        </div>
+        <div class="form-field">
+          <label>Proximity to Rectifier <span style="color:var(--text-muted)">— optional</span></label>
+          <select id="dc-proximity">
+            <option value="1.3">Near — within 1-2 blocks</option>
+            <option value="1.0" selected>Mid — moderate distance</option>
+            <option value="0.7">Far — end of station</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Historic Amp Reading (A) <span style="color:var(--text-muted)">— optional</span></label>
+          <input type="number" id="dc-hist-amps" placeholder="e.g. 1.2" step="0.01">
+        </div>
+        <div class="form-field">
+          <label>Historic Rectifier Output (A) <span style="color:var(--text-muted)">— optional</span></label>
+          <input type="number" id="dc-hist-rect" placeholder="e.g. 7.0" step="0.01">
+        </div>
+        <div class="form-field">
+          <label>Notes</label>
+          <input type="text" id="dc-notes" placeholder="Optional">
+        </div>
+      </div>
+
+      <!-- Live result -->
+      <div class="calc-result" id="dc-result" style="display:none;">
+        <div class="cr-block">
+          <span class="cr-label">Calculated Amps</span>
+          <span class="cr-value" id="dc-res-amps" style="color:var(--teal)">—</span>
+        </div>
+        <div class="cr-block">
+          <span class="cr-label">Formula Used</span>
+          <span class="cr-value" id="dc-res-formula" style="font-size:11px; color:var(--text-dim)">—</span>
+        </div>
+        <div class="cr-block">
+          <span class="cr-label">Expected Range</span>
+          <span class="cr-value" id="dc-res-expected" style="font-size:14px; color:var(--text-dim)">—</span>
+        </div>
+        <div class="cr-block">
+          <span class="cr-label">Anomaly Ratio</span>
+          <span class="cr-value" id="dc-res-ratio" style="font-size:16px;">—</span>
+        </div>
+        <div class="cr-block">
+          <span class="cr-label">Historic Delta</span>
+          <span class="cr-value" id="dc-res-hist" style="font-size:14px; color:var(--text-dim)">—</span>
+        </div>
+        <div class="cr-block">
+          <span class="cr-label">Status</span>
+          <span class="cr-color-badge" id="dc-res-badge">—</span>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-teal" onclick="calcDropCheck()">▶ Calculate &amp; Add</button>
+        <button class="btn btn-panel" onclick="clearDropForm()">✕ Clear</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECTION 4: RESULTS TABLE ──────────────────────────────────── -->
+  <div class="section-block">
+    <div class="section-title">
+      <h2>📋 Session Results</h2>
+      <span id="results-count" style="font-size:10px; color:var(--text-muted);">0 entries</span>
+      <div style="margin-left:auto; display:flex; gap:8px;">
+        <button class="btn btn-panel" onclick="exportResults()" style="padding:4px 12px; font-size:9px;">💾 Export CSV</button>
+        <button class="btn btn-danger" onclick="clearAllResults()" style="padding:4px 12px; font-size:9px;">✕ Clear All</button>
+      </div>
+    </div>
+    <div class="section-body" style="padding:0; overflow-x:auto;">
+      <table class="results-table">
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Location</th>
+            <th>Amps</th>
+            <th>Expected</th>
+            <th>Ratio</th>
+            <th>Hist. Δ</th>
+            <th>Pipe %</th>
+            <th>Proximity</th>
+            <th>Status</th>
+            <th>Notes</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="results-body">
+          <tr><td colspan="11" class="empty-state">No entries yet — add bond checks or drop checks above</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- STATUS BAR -->
+<div class="status-bar">
+  <span id="status-rect">RECTIFIER: not set</span>
+  <span id="status-entries">ENTRIES: 0</span>
+  <span id="status-msg"></span>
+</div>
+
+<script>
+// ── STORAGE ────────────────────────────────────────────────────────────────
+const KEY_RECT    = 'fe_rectifier';
+const KEY_RESULTS = 'fe_results';
+
+let rectData  = JSON.parse(localStorage.getItem(KEY_RECT)  || 'null');
+let results   = JSON.parse(localStorage.getItem(KEY_RESULTS) || '[]');
+
+// ── INIT ───────────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  // Set today's date and current time as defaults
+  const now = new Date();
+  document.getElementById('rect-date').value = now.toISOString().slice(0,10);
+  document.getElementById('rect-time').value = now.toTimeString().slice(0,5);
+
+  if (rectData) {
+    document.getElementById('rect-amps').value  = rectData.amps  || '';
+    document.getElementById('rect-volts').value = rectData.volts || '';
+    document.getElementById('rect-date').value  = rectData.date  || '';
+    document.getElementById('rect-time').value  = rectData.time  || '';
+    document.getElementById('rect-tech').value  = rectData.tech  || '';
+    document.getElementById('rect-notes').value = rectData.notes || '';
+    updateRectSummary();
+  }
+  renderResults();
+});
+
+// ── COLLAPSIBLE ────────────────────────────────────────────────────────────
+function toggleSection(bodyId, iconId) {
+  const body = document.getElementById(bodyId);
+  const icon = document.getElementById(iconId);
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  icon.classList.toggle('open', !open);
+}
+
+// ── RECTIFIER ──────────────────────────────────────────────────────────────
+function saveRectifier() {
+  rectData = {
+    amps:  parseFloat(document.getElementById('rect-amps').value)  || null,
+    volts: parseFloat(document.getElementById('rect-volts').value) || null,
+    date:  document.getElementById('rect-date').value,
+    time:  document.getElementById('rect-time').value,
+    tech:  document.getElementById('rect-tech').value,
+    notes: document.getElementById('rect-notes').value,
+  };
+  localStorage.setItem(KEY_RECT, JSON.stringify(rectData));
+  updateRectSummary();
+}
+
+function updateRectSummary() {
+  if (!rectData || !rectData.amps) {
+    document.getElementById('rect-summary').style.display = 'none';
+    document.getElementById('status-rect').textContent = 'RECTIFIER: not set';
+    return;
+  }
+  document.getElementById('rect-summary').style.display = 'block';
+  document.getElementById('rect-bar').innerHTML = `
+    <div class="rect-stat"><span class="rs-label">Total Output</span><span class="rs-value">${rectData.amps}A</span></div>
+    ${rectData.volts ? `<div class="rect-stat"><span class="rs-label">Voltage</span><span class="rs-value">${rectData.volts}V</span></div>` : ''}
+    <div class="rect-stat"><span class="rs-label">Date</span><span class="rs-value" style="font-size:13px;">${rectData.date || '—'}</span></div>
+    <div class="rect-stat"><span class="rs-label">Time</span><span class="rs-value" style="font-size:13px;">${rectData.time || '—'}</span></div>
+    ${rectData.tech ? `<div class="rect-stat"><span class="rs-label">Tech</span><span class="rs-value" style="font-size:13px;">${rectData.tech}</span></div>` : ''}
+  `;
+  document.getElementById('status-rect').textContent =
+    `RECTIFIER: ${rectData.amps}A ${rectData.volts ? '/ ' + rectData.volts + 'V' : ''} ${rectData.date ? '— ' + rectData.date : ''}`;
+}
+
+// ── COLOR SCORING ──────────────────────────────────────────────────────────
+// expected = rectifier_amps × (pipe_pct/100) × proximity_multiplier
+// ratio    = actual / expected
+// historic delta = normalized actual - normalized historic (positive = increased)
+
+function scoreAmps(actual, expected) {
+  const ratio = actual / expected;
+  if      (ratio > 2.0)  return { color: 'red',    label: 'CRITICAL',       ratio };
+  else if (ratio > 1.5)  return { color: 'orange',  label: 'HIGH CONCERN',   ratio };
+  else if (ratio > 1.1)  return { color: 'yellow',  label: 'ELEVATED',       ratio };
+  else if (ratio > 0.6)  return { color: 'green',   label: 'NORMAL',         ratio };
+  else if (ratio > 0.3)  return { color: 'blue',    label: 'LOW',            ratio };
+  else                   return { color: 'blue-dim', label: 'CRITICALLY LOW', ratio };
+}
+
+function colorVar(c) {
+  return { red:'var(--red)', orange:'var(--orange)', yellow:'var(--yellow)',
+           green:'var(--green)', blue:'var(--blue)', 'blue-dim':'rgba(77,166,255,0.5)' }[c];
+}
+
+function proximityLabel(val) {
+  return val === '1.3' ? 'Near' : val === '0.7' ? 'Far' : 'Mid';
+}
+
+function expectedRange(rectAmps, pipePct, proxMult) {
+  const base = rectAmps * (pipePct / 100) * proxMult;
+  const lo   = (base * 0.6).toFixed(2);
+  const hi   = (base * 1.1).toFixed(2);
+  return { base, lo, hi, str: `${lo}–${hi}A` };
+}
+
+function historicDelta(currentAmps, currentRect, histAmps, histRect) {
+  if (!histAmps || !histRect || !currentRect) return null;
+  const normCurrent = currentAmps / currentRect;
+  const normHistoric = histAmps / histRect;
+  const deltaPct = ((normCurrent - normHistoric) / normHistoric) * 100;
+  return deltaPct;
+}
+
+// ── BOND CHECK ────────────────────────────────────────────────────────────
+function calcBondCheck() {
+  const address  = document.getElementById('bc-address').value.trim();
+  const amps     = parseFloat(document.getElementById('bc-amps').value);
+  const proxMult = parseFloat(document.getElementById('bc-proximity').value) || 1.0;
+  const histAmps = parseFloat(document.getElementById('bc-hist-amps').value) || null;
+  const histRect = parseFloat(document.getElementById('bc-hist-rect').value) || null;
+  const notes    = document.getElementById('bc-notes').value.trim();
+
+  if (!address)   { setMsg('Please enter a location address.'); return; }
+  if (isNaN(amps)) { setMsg('Please enter an amp reading.'); return; }
+
+  const rectAmps = rectData?.amps;
+  if (!rectAmps) { setMsg('Please set rectifier output first.'); return; }
+
+  // Score based on % of rectifier output directly when no pipe % is available
+  // Simple ratio: actual / (rectAmps * proxMult * 0.1) as a neutral baseline
+  // If no pipe %, we compare actual vs rectifier-normalized expectation only
+  const pctOfRect = amps / rectAmps;
+  const proxLabel = proximityLabel(String(proxMult));
+
+  // Build a ratio relative to proximity-weighted rectifier share
+  // Without pipe %, we use historical comparison as primary signal if available
+  let ratio = null;
+  let expStr = '—';
+
+  if (histAmps && histRect) {
+    // Historical comparison — normalize both to rectifier output
+    const normNow  = amps / rectAmps;
+    const normHist = histAmps / histRect;
+    ratio = normNow / normHist;
+    expStr = `~${(histAmps * rectAmps / histRect).toFixed(2)}A (hist. norm.)`;
+  } else {
+    // No history, no pipe % — score on % of total rectifier output
+    // Flag anything over 30% of rectifier as suspicious for a single bond check
+    ratio = pctOfRect / 0.15; // 15% of rectifier = "normal" for a mid-size leg
+    expStr = `~${(rectAmps * 0.15 * proxMult).toFixed(2)}A (est. baseline)`;
+  }
+
+  const score = scoreAmps(amps, amps / ratio); // back-calculate expected from ratio
+  const delta = historicDelta(amps, rectAmps, histAmps, histRect);
+
+  // Update live result display
+  const res = document.getElementById('bc-result');
+  res.style.display = 'flex';
+  document.getElementById('bc-res-amps').textContent     = amps.toFixed(2) + 'A';
+  document.getElementById('bc-res-expected').textContent = expStr;
+  document.getElementById('bc-res-ratio').style.color    = colorVar(score.color);
+  document.getElementById('bc-res-ratio').textContent    = score.ratio.toFixed(2) + '×';
+  document.getElementById('bc-res-hist').textContent     = delta !== null ? (delta >= 0 ? '+' : '') + delta.toFixed(0) + '%' : 'No history';
+  document.getElementById('bc-res-hist').style.color     = delta !== null ? (delta > 30 ? colorVar('orange') : colorVar('green')) : 'var(--text-muted)';
+  const badge = document.getElementById('bc-res-badge');
+  badge.textContent       = score.label;
+  badge.style.color       = colorVar(score.color);
+  badge.style.borderColor = colorVar(score.color);
+
+  results.push({
+    id: Date.now(), type: 'bond', address, amps,
+    pipePct: '—', proximity: proxLabel,
+    expected: expStr, ratio: score.ratio.toFixed(2),
+    color: score.color, label: score.label,
+    histDelta: delta !== null ? (delta >= 0 ? '+' : '') + delta.toFixed(0) + '%' : '—',
+    notes, date: rectData.date || ''
+  });
+  saveResults();
+  renderResults();
+  setMsg(`Bond check at ${address} added — ${score.label}`);
+}
+
+function clearBondForm() {
+  ['bc-address','bc-amps','bc-hist-amps','bc-hist-rect','bc-notes'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('bc-result').style.display = 'none';
+  document.getElementById('bc-proximity').value = '1.0';
+}
+
+// ── DROP CHECK ────────────────────────────────────────────────────────────
+function calcDropCheck() {
+  const start    = document.getElementById('dc-start').value.trim();
+  const end      = document.getElementById('dc-end').value.trim();
+  const mv       = parseFloat(document.getElementById('dc-mv').value);
+  const feet     = parseFloat(document.getElementById('dc-feet').value);
+  const constant = parseFloat(document.getElementById('dc-pipe').value);
+  const proxMult = parseFloat(document.getElementById('dc-proximity').value) || 1.0;
+  const histAmps = parseFloat(document.getElementById('dc-hist-amps').value) || null;
+  const histRect = parseFloat(document.getElementById('dc-hist-rect').value) || null;
+  const notes    = document.getElementById('dc-notes').value.trim();
+  const pipeLabel = document.getElementById('dc-pipe').options[document.getElementById('dc-pipe').selectedIndex].text;
+
+  if (!start || !end) { setMsg('Please enter start and end addresses.'); return; }
+  if (isNaN(mv))      { setMsg('Please enter an mV reading.'); return; }
+  if (isNaN(feet) || feet <= 0) { setMsg('Please enter distance in feet.'); return; }
+
+  const rectAmps = rectData?.amps;
+  if (!rectAmps) { setMsg('Please set rectifier output first.'); return; }
+
+  // Drop check formula: amps = mV × constant / footage
+  const calcAmps = (mv * constant) / feet;
+  const formula  = `${mv}mV × ${constant} ÷ ${feet}ft = ${calcAmps.toFixed(3)}A`;
+
+  // Score: use historical if available, otherwise compare to rectifier % baseline
+  let ratio, expStr;
+  if (histAmps && histRect) {
+    const normNow  = calcAmps / rectAmps;
+    const normHist = histAmps / histRect;
+    ratio  = normNow / normHist;
+    expStr = `~${(histAmps * rectAmps / histRect).toFixed(3)}A (hist. norm.)`;
+  } else {
+    // No history — use 15% of rectifier as neutral baseline for a segment
+    const baseline = rectAmps * 0.15 * proxMult;
+    ratio  = calcAmps / baseline;
+    expStr = `~${baseline.toFixed(3)}A (est. baseline)`;
+  }
+
+  const score = scoreAmps(calcAmps, calcAmps / ratio);
+  const delta = historicDelta(calcAmps, rectAmps, histAmps, histRect);
+
+  // Update live result display
+  const res = document.getElementById('dc-result');
+  res.style.display = 'flex';
+  document.getElementById('dc-res-amps').textContent     = calcAmps.toFixed(3) + 'A';
+  document.getElementById('dc-res-formula').textContent  = formula;
+  document.getElementById('dc-res-expected').textContent = expStr;
+  document.getElementById('dc-res-ratio').style.color    = colorVar(score.color);
+  document.getElementById('dc-res-ratio').textContent    = score.ratio.toFixed(2) + '×';
+  document.getElementById('dc-res-hist').textContent     = delta !== null ? (delta >= 0 ? '+' : '') + delta.toFixed(0) + '%' : 'No history';
+  document.getElementById('dc-res-hist').style.color     = delta !== null ? (delta > 30 ? colorVar('orange') : colorVar('green')) : 'var(--text-muted)';
+  const badge = document.getElementById('dc-res-badge');
+  badge.textContent       = score.label;
+  badge.style.color       = colorVar(score.color);
+  badge.style.borderColor = colorVar(score.color);
+
+  results.push({
+    id: Date.now(), type: 'drop',
+    address: `${start} → ${end}`,
+    amps: parseFloat(calcAmps.toFixed(3)),
+    formula, mv, feet, pipeLabel, pipePct: '—',
+    proximity: proximityLabel(String(proxMult)),
+    expected: expStr, ratio: score.ratio.toFixed(2),
+    color: score.color, label: score.label,
+    histDelta: delta !== null ? (delta >= 0 ? '+' : '') + delta.toFixed(0) + '%' : '—',
+    notes, date: rectData.date || ''
+  });
+  saveResults();
+  renderResults();
+  setMsg(`Drop check ${start} → ${end} = ${calcAmps.toFixed(3)}A — ${score.label}`);
+}
+
+function clearDropForm() {
+  ['dc-start','dc-end','dc-mv','dc-feet','dc-hist-amps','dc-hist-rect','dc-notes'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('dc-result').style.display = 'none';
+  document.getElementById('dc-proximity').value = '1.0';
+}
+
+// ── RESULTS TABLE ─────────────────────────────────────────────────────────
+function renderResults() {
+  const tbody = document.getElementById('results-body');
+  document.getElementById('results-count').textContent = results.length + ' entr' + (results.length === 1 ? 'y' : 'ies');
+  document.getElementById('status-entries').textContent = 'ENTRIES: ' + results.length;
+
+  if (!results.length) {
+    tbody.innerHTML = '<tr><td colspan="11" class="empty-state">No entries yet — add bond checks or drop checks above</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = results.map(r => {
+    const cv = colorVar(r.color);
+    const typeClass = r.type === 'bond' ? 'type-bond' : 'type-drop';
+    const typeLabel = r.type === 'bond' ? '🔗 Bond' : '🔌 Drop';
+    return `
+      <tr>
+        <td><span class="type-badge ${typeClass}">${typeLabel}</span></td>
+        <td style="max-width:200px; word-break:break-word;">${r.address}</td>
+        <td style="font-weight:bold; color:${cv}">${r.amps}A</td>
+        <td style="color:var(--text-muted)">${r.expected}</td>
+        <td style="color:${cv}; font-weight:bold">${r.ratio}×</td>
+        <td style="color:var(--text-muted)">${r.histDelta}</td>
+        <td style="color:var(--text-muted)">${r.pipePct}%</td>
+        <td style="color:var(--text-muted)">${r.proximity}</td>
+        <td><span class="color-pill" style="color:${cv}; border-color:${cv}">${r.label}</span></td>
+        <td style="color:var(--text-muted); max-width:140px; word-break:break-word">${r.notes || '—'}</td>
+        <td><button class="btn btn-panel" onclick="deleteResult(${r.id})" style="padding:2px 8px; font-size:9px;">✕</button></td>
+      </tr>`;
+  }).join('');
+}
+
+function deleteResult(id) {
+  results = results.filter(r => r.id !== id);
+  saveResults();
+  renderResults();
+}
+
+function saveResults() {
+  localStorage.setItem(KEY_RESULTS, JSON.stringify(results));
+}
+
+function clearAllResults() {
+  if (!confirm('Clear all session results? This cannot be undone.')) return;
+  results = [];
+  saveResults();
+  renderResults();
+  setMsg('All results cleared.');
+}
+
+// ── EXPORT CSV ────────────────────────────────────────────────────────────
+function exportResults() {
+  if (!results.length) { setMsg('No results to export.'); return; }
+  const headers = ['Type','Address','Amps (A)','Expected Range','Ratio','Historic Delta','Pipe %','Proximity','Status','Notes','Date'];
+  const rows = results.map(r => [
+    r.type, `"${r.address}"`, r.amps, `"${r.expected}"`,
+    r.ratio, r.histDelta, r.pipePct, r.proximity, r.label,
+    `"${r.notes || ''}"`, r.date
+  ]);
+  const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `cp409_field_entry_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  setMsg('Results exported to CSV.');
+}
+
+// ── UTILITY ───────────────────────────────────────────────────────────────
+function setMsg(msg) {
+  document.getElementById('status-msg').textContent = msg;
+  setTimeout(() => { document.getElementById('status-msg').textContent = ''; }, 4000);
+}
+</script>
+</body>
+</html>
