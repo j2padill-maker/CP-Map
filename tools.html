@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1a8090">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CP Scout">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CP Scout — Tools</title>
+<style>
+  :root {
+    --bg:          #3a3f44;
+    --surface:     #2e3338;
+    --panel:       #4a5058;
+    --panel-light: #555c64;
+    --border:      #6a737d;
+    --teal:        #4dd9e8;
+    --teal-dim:    #2aabb8;
+    --teal-dark:   #1a8090;
+    --text:        #f0f4f5;
+    --text-dim:    #c0cdd0;
+    --text-muted:  #8a9ea3;
+    --red:         #f04040;
+    --orange:      #f08020;
+    --yellow:      #e8d020;
+    --green:       #30c860;
+    --blue:        #4da6ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Courier New', monospace; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* NAV */
+  nav { background: var(--surface); border-bottom: 2px solid var(--teal-dark); display: flex; align-items: center; padding: 0 16px; flex-shrink: 0; height: 48px; }
+  .nav-brand .nav-logo { font-size: 14px; font-weight: bold; color: var(--teal); letter-spacing: 2px; text-transform: uppercase; text-shadow: 0 0 10px rgba(77,217,232,0.4); white-space: nowrap; }
+  .nav-tabs { display: flex; gap: 2px; flex: 1; margin-left: 20px; }
+  .nav-tab { padding: 0 14px; height: 48px; display: flex; align-items: center; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; color: var(--text-dim); border-bottom: 3px solid transparent; text-decoration: none; transition: all .15s; white-space: nowrap; }
+  .nav-tab:hover { color: var(--teal); background: rgba(77,217,232,0.05); }
+  .nav-tab.active { color: var(--teal); border-bottom-color: var(--teal); font-weight: bold; }
+
+  /* LAYOUT */
+  .main { display: flex; flex: 1; overflow: hidden; }
+
+  /* SIDEBAR */
+  .sidebar { width: 220px; background: var(--surface); border-right: 2px solid var(--teal-dark); display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
+  .sidebar-hdr { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .sidebar-hdr h2 { font-size: 10px; letter-spacing: 2px; color: var(--teal); text-transform: uppercase; font-weight: bold; }
+
+  .tool-list { flex: 1; overflow-y: auto; padding: 8px 0; }
+  .tool-item { padding: 10px 14px; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: background .1s; border-left: 3px solid transparent; }
+  .tool-item:hover { background: rgba(77,217,232,0.06); }
+  .tool-item.active { background: rgba(77,217,232,0.11); border-left-color: var(--teal); }
+  .tool-item.primary .tool-label { color: var(--teal); font-size: 12px; font-weight: bold; letter-spacing: 1px; }
+  .tool-item.primary .tool-icon { font-size: 16px; }
+  .tool-icon  { font-size: 14px; flex-shrink: 0; }
+  .tool-label { font-size: 11px; color: var(--text-dim); letter-spacing: 1px; }
+  .tool-item.active .tool-label { color: var(--teal); }
+  .tool-divider { height: 1px; background: var(--border); margin: 6px 14px; opacity: .5; }
+
+  /* CONTENT PANEL */
+  .content-panel { flex: 1; overflow-y: auto; padding: 20px 24px; }
+  .content-panel::-webkit-scrollbar { width: 5px; }
+  .content-panel::-webkit-scrollbar-track { background: var(--bg); }
+  .content-panel::-webkit-scrollbar-thumb { background: var(--border); }
+
+  /* TOOL SECTIONS (hidden by default, shown when active) */
+  .tool-section { display: none; flex-direction: column; gap: 18px; }
+  .tool-section.active { display: flex; }
+
+  /* SECTION HEADER */
+  .tool-title { font-size: 15px; letter-spacing: 2px; color: var(--teal); text-transform: uppercase; font-weight: bold; padding-bottom: 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  .tool-title .tool-title-icon { font-size: 20px; }
+  .tool-subtitle { font-size: 10px; color: var(--text-muted); letter-spacing: 1px; margin-top: 3px; }
+
+  /* CARDS */
+  .card { background: var(--surface); border: 1px solid var(--border); padding: 16px; }
+  .card-title { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--teal); font-weight: bold; margin-bottom: 14px; }
+
+  /* FORM */
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .form-field { display: flex; flex-direction: column; gap: 4px; }
+  .form-field label { font-size: 9px; letter-spacing: 1px; color: var(--text-muted); text-transform: uppercase; }
+  .form-field input, .form-field select { background: var(--panel); border: 1px solid var(--border); color: var(--text); padding: 7px 10px; font-size: 11px; font-family: inherit; transition: border-color .15s; }
+  .form-field input:focus, .form-field select:focus { outline: none; border-color: var(--teal); }
+  .form-field input::placeholder { color: var(--text-muted); }
+  .field-hint { font-size: 9px; color: var(--text-muted); margin-top: 2px; }
+
+  /* RESULT BOX */
+  .result-box { background: var(--panel); border: 1px solid var(--border); padding: 14px 16px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-top: 4px; }
+  .rb-block { display: flex; flex-direction: column; gap: 2px; }
+  .rb-label { font-size: 9px; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; }
+  .rb-value { font-size: 22px; font-weight: bold; }
+  .rb-value.sm { font-size: 14px; }
+  .rb-badge { padding: 4px 14px; font-size: 11px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; border: 2px solid; display: inline-block; margin-top: 2px; }
+
+  /* BUTTONS */
+  .btn-row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  .btn { padding: 8px 18px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; font-family: inherit; font-weight: bold; border: 1px solid; transition: all .15s; }
+  .btn-teal  { background: var(--teal-dark); border-color: var(--teal); color: #fff; }
+  .btn-teal:hover { background: var(--teal-dim); }
+  .btn-panel { background: var(--panel); border-color: var(--border); color: var(--text-dim); }
+  .btn-panel:hover { border-color: var(--teal); color: var(--teal); }
+
+  /* SCALE LEGEND */
+  .scale-legend { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .scale-item { display: flex; align-items: center; gap: 6px; font-size: 9px; color: var(--text-dim); letter-spacing: 1px; padding: 4px 8px; border: 1px solid var(--border); background: var(--panel); }
+  .scale-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+  /* REFERENCE TABLES */
+  .ref-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .ref-table th { background: var(--panel); color: var(--text-muted); font-size: 9px; letter-spacing: 2px; text-transform: uppercase; padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .ref-table td { padding: 7px 12px; border-bottom: 1px solid rgba(106,115,125,0.25); vertical-align: middle; }
+  .ref-table tr:last-child td { border-bottom: none; }
+  .ref-table tr:hover td { background: rgba(77,217,232,0.04); }
+  .ref-table .highlight td { color: var(--teal); font-weight: bold; }
+  .ref-table .val { font-weight: bold; color: var(--teal); }
+  .ref-table .dim { color: var(--text-muted); }
+  .ref-table .anodic { color: var(--red); }
+  .ref-table .cathodic { color: var(--green); }
+
+  /* SHUNT CALC */
+  .shunt-calc { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; align-items: end; }
+  .shunt-result { background: var(--panel); border: 1px solid var(--teal-dark); padding: 12px 16px; display: flex; align-items: center; gap: 16px; margin-top: 4px; }
+  .shunt-result .sr-amps { font-size: 28px; font-weight: bold; color: var(--teal); }
+  .shunt-result .sr-label { font-size: 9px; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; }
+  .shunt-result .sr-formula { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+
+  /* OHMS LAW WHEEL */
+  .ohm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .ohm-group { background: var(--panel); border: 1px solid var(--border); padding: 14px; }
+  .ohm-group h3 { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--teal); margin-bottom: 12px; }
+  .ohm-formula-list { display: flex; flex-direction: column; gap: 6px; }
+  .ohm-formula { display: flex; align-items: center; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid rgba(106,115,125,0.2); font-size: 11px; }
+  .ohm-formula:last-child { border-bottom: none; }
+  .ohm-formula .of-solve { color: var(--teal); font-weight: bold; min-width: 30px; }
+  .ohm-formula .of-eq { color: var(--text-dim); }
+
+  /* OHMS INTERACTIVE */
+  .ohm-inputs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .ohm-input-block { display: flex; flex-direction: column; gap: 4px; }
+  .ohm-input-block label { font-size: 9px; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; }
+  .ohm-input-block input { background: var(--panel); border: 1px solid var(--border); color: var(--text); padding: 7px 10px; font-size: 13px; font-family: inherit; font-weight: bold; width: 100%; }
+  .ohm-input-block input:focus { outline: none; border-color: var(--teal); }
+  .ohm-input-block input.solved { border-color: var(--teal-dim); background: rgba(77,217,232,0.07); color: var(--teal); }
+  .ohm-input-block input::placeholder { color: var(--text-muted); font-size: 11px; }
+  .ohm-hint { font-size: 9px; color: var(--text-muted); letter-spacing: 1px; margin-top: 8px; }
+
+  /* USEFUL FORMULAS */
+  .formula-list { display: flex; flex-direction: column; gap: 10px; }
+  .formula-item { background: var(--panel); border: 1px solid var(--border); padding: 12px 14px; display: flex; gap: 14px; align-items: flex-start; }
+  .formula-num { font-size: 11px; color: var(--teal); font-weight: bold; min-width: 22px; }
+  .formula-text { font-size: 11px; color: var(--text-dim); line-height: 1.7; }
+  .formula-eq { font-size: 12px; color: var(--text); font-weight: bold; margin-top: 4px; }
+
+  /* STATUS BAR */
+  .status-bar { background: var(--surface); border-top: 1px solid var(--border); padding: 5px 14px; font-size: 10px; color: var(--text-dim); letter-spacing: 1px; flex-shrink: 0; display: flex; gap: 20px; align-items: center; }
+  .s-label { color: var(--text-muted); }
+  .s-val { color: var(--teal); font-weight: bold; }
+  #status-msg { color: var(--text); margin-left: auto; font-style: italic; }
+
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: var(--surface); }
+  ::-webkit-scrollbar-thumb { background: var(--border); }
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-brand" href="index.html" style="text-decoration:none;">
+    <div class="nav-logo">⚡ CP Scout</div>
+  </a>
+  <div class="nav-tabs">
+    <a class="nav-tab" href="overview.html">📊 Overview</a>
+    <a class="nav-tab" href="map.html">🗺️ Map</a>
+    <a class="nav-tab" href="trends.html">📈 Trends</a>
+    <a class="nav-tab" href="field-entry.html">📋 Field Entry</a>
+    <a class="nav-tab active" href="tools.html">🔧 Tools</a>
+    <a class="nav-tab" href="library.html">📚 Library</a>
+  </div>
+</nav>
+
+<div class="main">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-hdr">
+      <h2>🔧 Tools</h2>
+    </div>
+    <div class="tool-list">
+      <div class="tool-item primary active" onclick="showTool('drop-check')">
+        <span class="tool-icon">⚡</span>
+        <span class="tool-label">Drop Check</span>
+      </div>
+      <div class="tool-divider"></div>
+      <div class="tool-item" onclick="showTool('shunt')">
+        <span class="tool-icon">🔌</span>
+        <span class="tool-label">Shunt Converter</span>
+      </div>
+      <div class="tool-item" onclick="showTool('pipe')">
+        <span class="tool-icon">📐</span>
+        <span class="tool-label">Pipe Constants</span>
+      </div>
+      <div class="tool-item" onclick="showTool('galvanic')">
+        <span class="tool-icon">⚗️</span>
+        <span class="tool-label">Galvanic Series</span>
+      </div>
+      <div class="tool-item" onclick="showTool('ohms')">
+        <span class="tool-icon">🔢</span>
+        <span class="tool-label">Ohm's Law</span>
+      </div>
+      <div class="tool-item" onclick="showTool('formulas')">
+        <span class="tool-icon">📏</span>
+        <span class="tool-label">Useful Formulas</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="content-panel">
+
+    <!-- ══════════════════════════════════════════════════════════
+         1. DROP CHECK
+    ══════════════════════════════════════════════════════════ -->
+    <div class="tool-section active" id="tool-drop-check">
+      <div>
+        <div class="tool-title"><span class="tool-title-icon">⚡</span>Drop Check Calculator</div>
+        <div class="tool-subtitle">Calculate amperage from mV drop reading — formula: mV × pipe constant ÷ footage</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Rectifier Output (required)</div>
+        <div class="form-grid">
+          <div class="form-field">
+            <label>Total Amp Output (A)</label>
+            <input type="number" id="t-rect-amps" placeholder="e.g. 7.0" step="0.01" oninput="syncRectifier()">
+          </div>
+          <div class="form-field">
+            <label>Voltage Output (V) <span style="color:var(--text-muted)">— optional</span></label>
+            <input type="number" id="t-rect-volts" placeholder="e.g. 3.6" step="0.01">
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Drop Check Inputs</div>
+        <div class="form-grid">
+          <div class="form-field">
+            <label>Start Address (Riser 1)</label>
+            <input type="text" id="t-dc-start" placeholder="e.g. 4265 Marzo St">
+          </div>
+          <div class="form-field">
+            <label>End Address (Riser 2)</label>
+            <input type="text" id="t-dc-end" placeholder="e.g. Marzo &amp; Kenalan">
+          </div>
+          <div class="form-field">
+            <label>mV Reading</label>
+            <input type="number" id="t-dc-mv" placeholder="e.g. 25.3" step="0.1" oninput="liveDropCalc()">
+            <span class="field-hint">Raw mV from multimeter</span>
+          </div>
+          <div class="form-field">
+            <label>Distance Riser to Riser (ft)</label>
+            <input type="number" id="t-dc-feet" placeholder="e.g. 140" step="1" oninput="liveDropCalc()">
+          </div>
+          <div class="form-field">
+            <label>Pipe Size</label>
+            <select id="t-dc-pipe" onchange="liveDropCalc()">
+              <option value="5.2">¾" — constant 5.2</option>
+              <option value="7.8">1" — constant 7.8</option>
+              <option value="12.6">1½" — constant 12.6</option>
+              <option value="16.9" selected>2" — constant 16.9</option>
+              <option value="26.8">2½" — constant 26.8</option>
+              <option value="35.1">3" — constant 35.1</option>
+              <option value="50.0">4" — constant 50.0</option>
+              <option value="39.9">4" Thin Wall — constant 39.9</option>
+              <option value="88.0">6" — constant 88.0</option>
+              <option value="48.8">6" Thin Wall — constant 48.8</option>
+              <option value="132.0">8" — constant 132.0</option>
+            </select>
+            <span class="field-hint">Formula: mV × constant ÷ footage</span>
+          </div>
+          <div class="form-field">
+            <label>Proximity to Rectifier</label>
+            <select id="t-dc-proximity" onchange="liveDropCalc()">
+              <option value="1.3">Near — within 1-2 blocks</option>
+              <option value="1.0" selected>Mid — moderate distance</option>
+              <option value="0.7">Far — end of station</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Historic Amp Reading (A) <span style="color:var(--text-muted)">— optional</span></label>
+            <input type="number" id="t-dc-hist-amps" placeholder="e.g. 1.2" step="0.01" oninput="liveDropCalc()">
+          </div>
+          <div class="form-field">
+            <label>Historic Rectifier Output (A) <span style="color:var(--text-muted)">— optional</span></label>
+            <input type="number" id="t-dc-hist-rect" placeholder="e.g. 7.0" step="0.01" oninput="liveDropCalc()">
+          </div>
+          <div class="form-field">
+            <label>Notes</label>
+            <input type="text" id="t-dc-notes" placeholder="Optional">
+          </div>
+        </div>
+
+        <!-- Live result -->
+        <div class="result-box" id="t-dc-result" style="display:none; margin-top:14px;">
+          <div class="rb-block">
+            <span class="rb-label">Calculated Amps</span>
+            <span class="rb-value" id="t-dc-res-amps" style="color:var(--teal)">—</span>
+          </div>
+          <div class="rb-block">
+            <span class="rb-label">Formula</span>
+            <span class="rb-value sm" id="t-dc-res-formula" style="color:var(--text-dim)">—</span>
+          </div>
+          <div class="rb-block">
+            <span class="rb-label">Expected</span>
+            <span class="rb-value sm" id="t-dc-res-expected" style="color:var(--text-dim)">—</span>
+          </div>
+          <div class="rb-block">
+            <span class="rb-label">Ratio</span>
+            <span class="rb-value" id="t-dc-res-ratio">—</span>
+          </div>
+          <div class="rb-block">
+            <span class="rb-label">Historic Δ</span>
+            <span class="rb-value sm" id="t-dc-res-hist" style="color:var(--text-muted)">—</span>
+          </div>
+          <div class="rb-block">
+            <span class="rb-label">Status</span>
+            <span class="rb-badge" id="t-dc-res-badge">—</span>
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-teal" onclick="calcDrop()">▶ Calculate</button>
+          <button class="btn btn-panel" onclick="clearDrop()">✕ Clear</button>
+        </div>
+      </div>
+
+      <!-- Color scale -->
+      <div class="card">
+        <div class="card-title">Current Anomaly Scale</div>
+        <div class="scale-legend">
+          <div class="scale-item"><div class="scale-dot" style="background:var(--red)"></div>&gt;2.0× expected — CRITICAL</div>
+          <div class="scale-item"><div class="scale-dot" style="background:var(--orange)"></div>1.5–2.0× — HIGH CONCERN</div>
+          <div class="scale-item"><div class="scale-dot" style="background:var(--yellow)"></div>1.1–1.5× — ELEVATED</div>
+          <div class="scale-item"><div class="scale-dot" style="background:var(--green)"></div>0.6–1.1× — NORMAL</div>
+          <div class="scale-item"><div class="scale-dot" style="background:var(--blue)"></div>0.3–0.6× — LOW</div>
+          <div class="scale-item"><div class="scale-dot" style="background:var(--blue); opacity:.5"></div>&lt;0.3× — CRITICALLY LOW</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════
+         2. SHUNT CONVERTER
+    ══════════════════════════════════════════════════════════ -->
+    <div class="tool-section" id="tool-shunt">
+      <div>
+        <div class="tool-title"><span class="tool-title-icon">🔌</span>Shunt Conversion Factors</div>
+        <div class="tool-subtitle">Enter mV reading and select shunt type to calculate amperage</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Live Shunt Calculator</div>
+        <div class="shunt-calc">
+          <div class="form-field">
+            <label>mV Reading</label>
+            <input type="number" id="s-mv" placeholder="e.g. 32.5" step="0.1" oninput="calcShunt()">
+          </div>
+          <div class="form-field">
+            <label>Shunt Type</label>
+            <select id="s-type" onchange="calcShunt()">
+              <option value="0.10">HOLLOWAY JB — 0.01Ω — 50mV/5A — ×0.10</option>
+              <option value="0.10">HOLLOWAY RS — 0.01Ω — 50mV/5A — ×0.10</option>
+              <option value="1.00">HOLLOWAY SS — 0.001Ω — 25mV/25A — ×1.00</option>
+              <option value="1.00">HOLLOWAY SO — 0.001Ω — 50mV/50A — ×1.00</option>
+              <option value="0.10">HOLLOWAY SW — 0.01Ω — 50mV/5A — ×0.10</option>
+              <option value="0.20">HOLLOWAY SW — 0.005Ω — 50mV/10A — ×0.20</option>
+              <option value="0.30">HOLLOWAY SW — 0.0033Ω — 50mV/15A — ×0.30</option>
+              <option value="0.40">HOLLOWAY SW — 0.0025Ω — 50mV/20A — ×0.40</option>
+              <option value="0.50">HOLLOWAY SW — 0.002Ω — 50mV/25A — ×0.50</option>
+              <option value="0.60">HOLLOWAY SW — 0.00167Ω — 50mV/30A — ×0.60</option>
+              <option value="0.80">HOLLOWAY SW — 0.00125Ω — 50mV/40A — ×0.80</option>
+              <option value="1.00">HOLLOWAY SW — 0.001Ω — 50mV/50A — ×1.00</option>
+              <option value="1.20">HOLLOWAY SW — 0.00083Ω — 50mV/60A — ×1.20</option>
+              <option value="1.50">HOLLOWAY SW — 0.00067Ω — 50mV/75A — ×1.50</option>
+              <option value="1.60">HOLLOWAY SW — 0.000525Ω — 50mV/80A — ×1.60</option>
+              <option value="2.00">HOLLOWAY SW — 0.0005Ω — 50mV/100A — ×2.00</option>
+              <option value="2.40">HOLLOWAY SW — 0.0004167Ω — 50mV/120A — ×2.40</option>
+              <option value="2.50">HOLLOWAY SW — 0.0004Ω — 50mV/125A — ×2.50</option>
+              <option value="3.00">HOLLOWAY SW — 0.00033Ω — 50mV/150A — ×3.00</option>
+              <option value="4.00">HOLLOWAY SW — 0.00025Ω — 50mV/200A — ×4.00</option>
+              <option value="0.01">RED — 0.1Ω — 2A — ×0.01</option>
+              <option value="0.10">YELLOW — 0.01Ω — 8A — ×0.10</option>
+              <option value="1.00">ORANGE — 0.001Ω — 25A — ×1.00</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Multiply mV By</label>
+            <input type="text" id="s-mult" readonly style="color:var(--teal);font-weight:bold;background:rgba(77,217,232,0.06);border-color:var(--teal-dark);">
+          </div>
+        </div>
+        <div class="shunt-result" id="s-result" style="margin-top:12px;">
+          <div>
+            <div class="sr-label">Result</div>
+            <div class="sr-amps" id="s-result-amps">— A</div>
+            <div class="sr-formula" id="s-result-formula">Enter mV reading above</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Shunt Conversion Factor Reference Table</div>
+        <table class="ref-table">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Size (Ω)</th>
+              <th>Rating mV</th>
+              <th>Rating Amps</th>
+              <th>Mult. mV By</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>HOLLOWAY JB</td><td class="val">0.01</td><td>50</td><td>5</td><td class="val">0.10</td></tr>
+            <tr><td>HOLLOWAY RS</td><td class="val">0.01</td><td>50</td><td>5</td><td class="val">0.10</td></tr>
+            <tr><td>HOLLOWAY SS</td><td class="val">0.001</td><td>25</td><td>25</td><td class="val">1.00</td></tr>
+            <tr><td>HOLLOWAY SO</td><td class="val">0.001</td><td>50</td><td>50</td><td class="val">1.00</td></tr>
+            <tr><td>HOLLOWAY SW</td><td class="val">0.01</td><td>50</td><td>5</td><td class="val">0.10</td></tr>
+            <tr><td>HOLLOWAY SW</td><td class="val">0.005</td><td>50</td><td>10</td><td class="val">0.20</td></tr>
+            <tr><td>HOLLOWAY SW</td><td class="val">0.0033</td><td>50</td><td>15</td><td class="val">0.30</td></tr>
+            <tr><td>HOLLOWAY SW</td><td class="val">0.0025</td><td>50</td><td>20</td><td class="val">0.40</td></tr>
+            <tr><td>HOLLOWAY SW</td><td class="val">0.002</td><td>50</td><td>25</td><td class="val">0.50</td></tr>
+            <tr><td>HOLLOWAY SW</td><td class="val">0.00167</td><td>50</td><td>30</td><td class="val">0.60</td></tr>
+            <tr><td>HOLLOWAY SW</td><td class="val">0.00125</td><td>50</td><td>40</td><td class="val">0.80</td></tr>
+            <tr><td>HOLLOWAY SW</td><td class="val">0.001</td><td>50</td><td>50</td><td class="val">1.00</td></tr>
+            <tr><td>HOLLOWAY SW</td><td class="val">0.00083</td><td>50</td><td>60</td><td class="val">1.20</td></tr>
+            <tr><td>HOLLOWAY SW</td><td class="val">0.00067</td><td>50</td><td>75</td><td class="val">1.50</td></tr>
+            <tr><td>HOLLOWAY SW</td><td class="val">0.000525</td><td>50</td><td>80</td><td class="val">1.60</td></tr>
+            <tr><td>HOLLOWAY SW</td><td class="val">0.0005</td><td>50</td><td>100</td><td class="val">2.00</td></tr>
+            <tr><td>HOLLOWAY SW</td><td class="val">0.0004167</td><td>50</td><td>120</td><td class="val">2.40</td></tr>
+            <tr><td>HOLLOWAY SW</td><td class="val">0.0004</td><td>50</td><td>125</td><td class="val">2.50</td></tr>
+            <tr><td>HOLLOWAY SW</td><td class="val">0.00033</td><td>50</td><td>150</td><td class="val">3.00</td></tr>
+            <tr><td>HOLLOWAY SW</td><td class="val">0.00025</td><td>50</td><td>200</td><td class="val">4.00</td></tr>
+            <tr style="border-top:1px solid var(--border)"><td style="color:var(--red);font-weight:bold">RED</td><td class="val">0.1</td><td>—</td><td>2</td><td class="val">0.01</td></tr>
+            <tr><td style="color:var(--yellow);font-weight:bold">YELLOW</td><td class="val">0.01</td><td>—</td><td>8</td><td class="val">0.10</td></tr>
+            <tr><td style="color:var(--orange);font-weight:bold">ORANGE</td><td class="val">0.001</td><td>—</td><td>25</td><td class="val">1.00</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════
+         3. PIPE CONSTANTS
+    ══════════════════════════════════════════════════════════ -->
+    <div class="tool-section" id="tool-pipe">
+      <div>
+        <div class="tool-title"><span class="tool-title-icon">📐</span>Pipe Size Constants</div>
+        <div class="tool-subtitle">Constants used in the drop check formula: Amps = mV × constant ÷ footage</div>
+      </div>
+
+      <div class="card">
+        <table class="ref-table">
+          <thead>
+            <tr>
+              <th>Pipe Size</th>
+              <th>Wall Type</th>
+              <th>Constant</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="val">¾"</td><td class="dim">Standard</td><td class="val">5.2</td><td class="dim">Service line, small lateral</td></tr>
+            <tr><td class="val">1"</td><td class="dim">Standard</td><td class="val">7.8</td><td class="dim">Service / small main</td></tr>
+            <tr><td class="val">1½"</td><td class="dim">Standard</td><td class="val">12.6</td><td class="dim">Small main</td></tr>
+            <tr class="highlight"><td class="val">2"</td><td class="dim">Standard</td><td class="val">16.9</td><td class="dim">Common distribution main ← default</td></tr>
+            <tr><td class="val">2½"</td><td class="dim">Standard</td><td class="val">26.8</td><td class="dim">Distribution main</td></tr>
+            <tr><td class="val">3"</td><td class="dim">Standard</td><td class="val">35.1</td><td class="dim">Distribution main</td></tr>
+            <tr><td class="val">4"</td><td class="dim">Standard</td><td class="val">50.0</td><td class="dim">Distribution / transmission main</td></tr>
+            <tr><td class="val">4"</td><td class="dim">Thin Wall</td><td class="val">39.9</td><td class="dim">Lower constant — less material</td></tr>
+            <tr><td class="val">6"</td><td class="dim">Standard</td><td class="val">88.0</td><td class="dim">Transmission main</td></tr>
+            <tr><td class="val">6"</td><td class="dim">Thin Wall</td><td class="val">48.8</td><td class="dim">Significantly lower — confirm wall type</td></tr>
+            <tr><td class="val">8"</td><td class="dim">Standard</td><td class="val">132.0</td><td class="dim">Large transmission main</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Formula Reference</div>
+        <div class="formula-list">
+          <div class="formula-item">
+            <div class="formula-num">▶</div>
+            <div>
+              <div class="formula-text">To find amperage from a millivolt drop reading:</div>
+              <div class="formula-eq">Amps = mV reading × pipe constant ÷ footage (riser to riser)</div>
+            </div>
+          </div>
+          <div class="formula-item">
+            <div class="formula-num">▶</div>
+            <div>
+              <div class="formula-text">Thin wall pipe carries less material cross-section, resulting in lower resistance and a lower constant. Always confirm wall type before selecting constant — using the wrong one will miscalculate current by 40–45% on 4" and 6" pipe.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════
+         4. GALVANIC SERIES
+    ══════════════════════════════════════════════════════════ -->
+    <div class="tool-section" id="tool-galvanic">
+      <div>
+        <div class="tool-title"><span class="tool-title-icon">⚗️</span>Practical Galvanic Series</div>
+        <div class="tool-subtitle">Typical potential vs copper sulfate reference electrode (CSE) in neutral soils &amp; water</div>
+      </div>
+
+      <div class="card">
+        <table class="ref-table">
+          <thead>
+            <tr>
+              <th>Metal / Material</th>
+              <th>Potential (V vs CSE)</th>
+              <th>Character</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Commercially pure magnesium</td><td class="val anodic">−1.75</td><td class="dim">Most anodic (sacrificial)</td></tr>
+            <tr><td>Magnesium alloy (6% Al, 3% Zn, 0.15% Mn)</td><td class="val anodic">−1.6</td><td class="dim">Sacrificial anode alloy</td></tr>
+            <tr><td>Zinc</td><td class="val anodic">−1.1</td><td class="dim">Galvanizing / anode</td></tr>
+            <tr><td>Aluminum alloy (5% zinc)</td><td class="val anodic">−1.05</td><td class="dim">Offshore anode alloy</td></tr>
+            <tr><td>Commercially pure aluminum</td><td class="val anodic">−0.8</td><td class="dim">Anodic to steel</td></tr>
+            <tr><td>Mild steel (clean and shiny)</td><td class="val">−0.5 to −0.8</td><td class="dim">Common CP target</td></tr>
+            <tr class="highlight"><td>Mild steel (rusted)</td><td class="val">−0.2 to −0.5</td><td class="dim">Depolarized / active corrosion</td></tr>
+            <tr><td>Cast iron (not graphitized)</td><td class="val">−0.5</td><td class="dim">Similar to mild steel</td></tr>
+            <tr><td>Lead</td><td class="val">−0.5</td><td class="dim">Cable sheathing</td></tr>
+            <tr><td>Mild steel in concrete</td><td class="val">−0.2</td><td class="dim">Passivated by alkaline env.</td></tr>
+            <tr><td>Copper, brass, bronze</td><td class="val cathodic">−0.2</td><td class="dim">Noble — cathodic to steel</td></tr>
+            <tr><td>High silicon cast iron</td><td class="val cathodic">−0.2</td><td class="dim">Impressed current anode</td></tr>
+            <tr><td>Mill scale on steel</td><td class="val cathodic">−0.2</td><td class="dim">Cathodic — drives corrosion</td></tr>
+            <tr><td>Carbon, graphite, coke</td><td class="val cathodic">+0.3</td><td class="dim">Most cathodic listed</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-title">CP Protection Criteria (CSE Reference)</div>
+        <div class="formula-list">
+          <div class="formula-item">
+            <div class="formula-num" style="color:var(--green)">✓</div>
+            <div>
+              <div class="formula-text">NACE criterion 1 — instant-off potential at or more negative than:</div>
+              <div class="formula-eq">−850 mV vs CSE (most common criterion)</div>
+            </div>
+          </div>
+          <div class="formula-item">
+            <div class="formula-num" style="color:var(--green)">✓</div>
+            <div>
+              <div class="formula-text">NACE criterion 2 — 100 mV minimum polarization shift (on vs instant-off):</div>
+              <div class="formula-eq">|OFF − ON| ≥ 100 mV</div>
+            </div>
+          </div>
+          <div class="formula-item">
+            <div class="formula-num" style="color:var(--yellow)">△</div>
+            <div>
+              <div class="formula-text">High resistivity soils — criterion may be extended to −750 mV in some standards. Confirm with applicable code for your jurisdiction.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════
+         5. OHM'S LAW
+    ══════════════════════════════════════════════════════════ -->
+    <div class="tool-section" id="tool-ohms">
+      <div>
+        <div class="tool-title"><span class="tool-title-icon">🔢</span>Ohm's Law &amp; Power Formulas</div>
+        <div class="tool-subtitle">Enter any two known values — the remaining two will be solved automatically</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Interactive Calculator</div>
+        <div class="ohm-inputs">
+          <div class="ohm-input-block">
+            <label>E — Voltage (V)</label>
+            <input type="number" id="ohm-e" placeholder="Volts" step="any" oninput="solveOhm('e')">
+          </div>
+          <div class="ohm-input-block">
+            <label>I — Current (A)</label>
+            <input type="number" id="ohm-i" placeholder="Amps" step="any" oninput="solveOhm('i')">
+          </div>
+          <div class="ohm-input-block">
+            <label>R — Resistance (Ω)</label>
+            <input type="number" id="ohm-r" placeholder="Ohms" step="any" oninput="solveOhm('r')">
+          </div>
+          <div class="ohm-input-block">
+            <label>P — Power (W)</label>
+            <input type="number" id="ohm-p" placeholder="Watts" step="any" oninput="solveOhm('p')">
+          </div>
+        </div>
+        <div class="ohm-hint">Teal fields are solved values. Clear any field to re-enter it as a known value.</div>
+        <div class="btn-row">
+          <button class="btn btn-panel" onclick="clearOhm()">✕ Clear All</button>
+        </div>
+      </div>
+
+      <div class="ohm-grid">
+        <div class="ohm-group">
+          <h3>To Find Voltage (E)</h3>
+          <div class="ohm-formula-list">
+            <div class="ohm-formula"><span class="of-solve">E =</span><span class="of-eq">I × R</span></div>
+            <div class="ohm-formula"><span class="of-solve">E =</span><span class="of-eq">P ÷ I</span></div>
+            <div class="ohm-formula"><span class="of-solve">E =</span><span class="of-eq">√(P × R)</span></div>
+          </div>
+        </div>
+        <div class="ohm-group">
+          <h3>To Find Current (I)</h3>
+          <div class="ohm-formula-list">
+            <div class="ohm-formula"><span class="of-solve">I =</span><span class="of-eq">E ÷ R</span></div>
+            <div class="ohm-formula"><span class="of-solve">I =</span><span class="of-eq">P ÷ E</span></div>
+            <div class="ohm-formula"><span class="of-solve">I =</span><span class="of-eq">√(P ÷ R)</span></div>
+          </div>
+        </div>
+        <div class="ohm-group">
+          <h3>To Find Resistance (R)</h3>
+          <div class="ohm-formula-list">
+            <div class="ohm-formula"><span class="of-solve">R =</span><span class="of-eq">E ÷ I</span></div>
+            <div class="ohm-formula"><span class="of-solve">R =</span><span class="of-eq">E² ÷ P</span></div>
+            <div class="ohm-formula"><span class="of-solve">R =</span><span class="of-eq">P ÷ I²</span></div>
+          </div>
+        </div>
+        <div class="ohm-group">
+          <h3>To Find Power (P)</h3>
+          <div class="ohm-formula-list">
+            <div class="ohm-formula"><span class="of-solve">P =</span><span class="of-eq">E × I</span></div>
+            <div class="ohm-formula"><span class="of-solve">P =</span><span class="of-eq">E² ÷ R</span></div>
+            <div class="ohm-formula"><span class="of-solve">P =</span><span class="of-eq">I² × R</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Resistance Formulas</div>
+        <div class="formula-list">
+          <div class="formula-item">
+            <div class="formula-num">∥</div>
+            <div>
+              <div class="formula-text">Parallel resistance (anodes in parallel, bonded connections):</div>
+              <div class="formula-eq">1/R<sub>T</sub> = 1/R₁ + 1/R₂ + 1/R₃ …</div>
+            </div>
+          </div>
+          <div class="formula-item">
+            <div class="formula-num">—</div>
+            <div>
+              <div class="formula-text">Series resistance (wire runs, multiple bonds in line):</div>
+              <div class="formula-eq">R<sub>T</sub> = R₁ + R₂ + R₃ …</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════
+         6. USEFUL FORMULAS
+    ══════════════════════════════════════════════════════════ -->
+    <div class="tool-section" id="tool-formulas">
+      <div>
+        <div class="tool-title"><span class="tool-title-icon">📏</span>Useful Field Formulas</div>
+        <div class="tool-subtitle">Geometry and unit conversion reference — from Farwest Corrosion Control field card</div>
+      </div>
+
+      <div class="card">
+        <div class="formula-list">
+          <div class="formula-item">
+            <div class="formula-num">1</div>
+            <div>
+              <div class="formula-text">To calculate the circumference of a circle, multiply the diameter by 3.1416.</div>
+              <div class="formula-eq">C = d × 3.1416</div>
+            </div>
+          </div>
+          <div class="formula-item">
+            <div class="formula-num">2</div>
+            <div>
+              <div class="formula-text">To calculate the area of a circle, multiply 3.1416 by the square of the radius.</div>
+              <div class="formula-eq">A = 3.1416 × r²</div>
+            </div>
+          </div>
+          <div class="formula-item">
+            <div class="formula-num">3</div>
+            <div>
+              <div class="formula-text">To calculate the area of a triangle, multiply the base by ½ the perpendicular height.</div>
+              <div class="formula-eq">A = base × (height ÷ 2)</div>
+            </div>
+          </div>
+          <div class="formula-item">
+            <div class="formula-num">4</div>
+            <div>
+              <div class="formula-text">To calculate the area of a cylinder, multiply the circumference by the length.</div>
+              <div class="formula-eq">A = (d × 3.1416) × length</div>
+            </div>
+          </div>
+          <div class="formula-item">
+            <div class="formula-num">5</div>
+            <div>
+              <div class="formula-text">To calculate the volume of a cylinder, multiply the area of the end by the length.</div>
+              <div class="formula-eq">V = (3.1416 × r²) × length</div>
+            </div>
+          </div>
+          <div class="formula-item">
+            <div class="formula-num">6</div>
+            <div>
+              <div class="formula-text">A gallon of water weighs 8.25 pounds and contains 231 cubic inches.</div>
+              <div class="formula-eq">1 gal = 8.25 lb = 231 in³ = 7.48 gal/ft³</div>
+            </div>
+          </div>
+          <div class="formula-item">
+            <div class="formula-num">7</div>
+            <div>
+              <div class="formula-text">A cubic foot of water contains 7.48 gallons and weighs 62.5 pounds. Contains 1728 cubic inches.</div>
+              <div class="formula-eq">1 ft³ = 7.48 gal = 62.5 lb = 1728 in³</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end content-panel -->
+</div><!-- end main -->
+
+<div class="status-bar">
+  <span><span class="s-label">MODULE </span><span class="s-val">TOOLS</span></span>
+  <span><span class="s-label">RECTIFIER </span><span class="s-val" id="sb-rect">NOT SET</span></span>
+  <span id="status-msg"></span>
+</div>
+
+<script>
+// ── TOOL NAVIGATION ───────────────────────────────────────────────────────────
+function showTool(id) {
+  document.querySelectorAll('.tool-section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tool-item').forEach(i => i.classList.remove('active'));
+  document.getElementById('tool-' + id).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+// ── RECTIFIER SYNC (reads from field-entry localStorage key) ──────────────────
+const KEY_RECT = 'fe_rectifier';
+let rectData = null;
+
+function loadRectifier() {
+  try {
+    const d = localStorage.getItem(KEY_RECT);
+    if (d) rectData = JSON.parse(d);
+  } catch(e) { rectData = null; }
+
+  if (rectData && rectData.amps) {
+    document.getElementById('t-rect-amps').value  = rectData.amps  || '';
+    document.getElementById('t-rect-volts').value = rectData.volts || '';
+    document.getElementById('sb-rect').textContent =
+      rectData.amps + 'A' + (rectData.volts ? ' / ' + rectData.volts + 'V' : '');
+  }
+}
+
+function syncRectifier() {
+  const amps  = parseFloat(document.getElementById('t-rect-amps').value)  || null;
+  const volts = parseFloat(document.getElementById('t-rect-volts').value) || null;
+  rectData = { ...(rectData || {}), amps, volts };
+  // Write back to shared key so field-entry stays in sync
+  try { localStorage.setItem(KEY_RECT, JSON.stringify(rectData)); } catch(e) {}
+  document.getElementById('sb-rect').textContent = amps
+    ? amps + 'A' + (volts ? ' / ' + volts + 'V' : '')
+    : 'NOT SET';
+  liveDropCalc();
+}
+
+// ── SCORING HELPERS ───────────────────────────────────────────────────────────
+function scoreAmps(actual, expected) {
+  const ratio = actual / expected;
+  if      (ratio > 2.0) return { color: 'red',      label: 'CRITICAL',       ratio };
+  else if (ratio > 1.5) return { color: 'orange',   label: 'HIGH CONCERN',   ratio };
+  else if (ratio > 1.1) return { color: 'yellow',   label: 'ELEVATED',       ratio };
+  else if (ratio > 0.6) return { color: 'green',    label: 'NORMAL',         ratio };
+  else if (ratio > 0.3) return { color: 'blue',     label: 'LOW',            ratio };
+  else                  return { color: 'blue-dim', label: 'CRITICALLY LOW', ratio };
+}
+
+function colorVar(c) {
+  return { red:'var(--red)', orange:'var(--orange)', yellow:'var(--yellow)',
+           green:'var(--green)', blue:'var(--blue)', 'blue-dim':'rgba(77,166,255,0.5)' }[c] || 'var(--text)';
+}
+
+function historicDelta(currentAmps, currentRect, histAmps, histRect) {
+  if (!histAmps || !currentRect) return null;
+  const effHistRect = histRect || currentRect;
+  return ((currentAmps / currentRect) - (histAmps / effHistRect)) / (histAmps / effHistRect) * 100;
+}
+
+// ── DROP CHECK ────────────────────────────────────────────────────────────────
+function liveDropCalc() {
+  const mv       = parseFloat(document.getElementById('t-dc-mv').value);
+  const feet     = parseFloat(document.getElementById('t-dc-feet').value);
+  const constant = parseFloat(document.getElementById('t-dc-pipe').value);
+  if (isNaN(mv) || isNaN(feet) || feet <= 0) {
+    document.getElementById('t-dc-result').style.display = 'none';
+    return;
+  }
+  const calcAmps = (mv * constant) / feet;
+  const rectAmps = rectData?.amps || null;
+  const proxMult = parseFloat(document.getElementById('t-dc-proximity').value) || 1.0;
+  const histAmps = parseFloat(document.getElementById('t-dc-hist-amps').value) || null;
+  const histRect = parseFloat(document.getElementById('t-dc-hist-rect').value) || null;
+  const formula  = `${mv}mV × ${constant} ÷ ${feet}ft = ${calcAmps.toFixed(3)}A`;
+
+  let ratio, expStr;
+  if (histAmps) {
+    const effHistRect = histRect || rectAmps || 1;
+    const expectedAmp = histAmps * ((rectAmps || effHistRect) / effHistRect);
+    ratio  = calcAmps / expectedAmp;
+    expStr = `~${expectedAmp.toFixed(3)}A (from history)`;
+  } else if (rectAmps) {
+    const baseline = rectAmps * 0.15 * proxMult;
+    ratio  = calcAmps / baseline;
+    expStr = `~${baseline.toFixed(3)}A (est. baseline)`;
+  } else {
+    // No rectifier set — show raw result only
+    document.getElementById('t-dc-result').style.display = 'flex';
+    document.getElementById('t-dc-res-amps').textContent    = calcAmps.toFixed(3) + 'A';
+    document.getElementById('t-dc-res-formula').textContent = formula;
+    document.getElementById('t-dc-res-expected').textContent = 'Set rectifier for scoring';
+    document.getElementById('t-dc-res-ratio').textContent   = '—';
+    document.getElementById('t-dc-res-hist').textContent    = '—';
+    document.getElementById('t-dc-res-badge').textContent   = '—';
+    return;
+  }
+
+  const score = scoreAmps(calcAmps, calcAmps / ratio);
+  const delta = historicDelta(calcAmps, rectAmps, histAmps, histRect);
+
+  document.getElementById('t-dc-result').style.display = 'flex';
+  document.getElementById('t-dc-res-amps').textContent     = calcAmps.toFixed(3) + 'A';
+  document.getElementById('t-dc-res-formula').textContent  = formula;
+  document.getElementById('t-dc-res-expected').textContent = expStr;
+  document.getElementById('t-dc-res-ratio').style.color    = colorVar(score.color);
+  document.getElementById('t-dc-res-ratio').textContent    = score.ratio.toFixed(2) + '×';
+  document.getElementById('t-dc-res-hist').textContent     = delta !== null ? (delta >= 0 ? '+' : '') + delta.toFixed(0) + '%' : 'No history';
+  document.getElementById('t-dc-res-hist').style.color     = delta !== null ? (Math.abs(delta) > 30 ? colorVar('orange') : colorVar('green')) : 'var(--text-muted)';
+  const badge = document.getElementById('t-dc-res-badge');
+  badge.textContent       = score.label;
+  badge.style.color       = colorVar(score.color);
+  badge.style.borderColor = colorVar(score.color);
+}
+
+function calcDrop() {
+  const mv    = parseFloat(document.getElementById('t-dc-mv').value);
+  const feet  = parseFloat(document.getElementById('t-dc-feet').value);
+  const start = document.getElementById('t-dc-start').value.trim();
+  const end   = document.getElementById('t-dc-end').value.trim();
+  if (!start || !end) { setMsg('Please enter start and end addresses.'); return; }
+  if (isNaN(mv))      { setMsg('Please enter a mV reading.'); return; }
+  if (isNaN(feet) || feet <= 0) { setMsg('Please enter distance in feet.'); return; }
+  liveDropCalc();
+  setMsg('Drop check calculated — ' + start + ' → ' + end);
+}
+
+function clearDrop() {
+  ['t-dc-start','t-dc-end','t-dc-mv','t-dc-feet','t-dc-hist-amps','t-dc-hist-rect','t-dc-notes'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('t-dc-proximity').value = '1.0';
+  document.getElementById('t-dc-pipe').value      = '16.9';
+  document.getElementById('t-dc-result').style.display = 'none';
+}
+
+// ── SHUNT CONVERTER ───────────────────────────────────────────────────────────
+function calcShunt() {
+  const mv   = parseFloat(document.getElementById('s-mv').value);
+  const mult = parseFloat(document.getElementById('s-type').value);
+  document.getElementById('s-mult').value = mult.toFixed(2);
+
+  if (isNaN(mv)) {
+    document.getElementById('s-result-amps').textContent   = '— A';
+    document.getElementById('s-result-formula').textContent = 'Enter mV reading above';
+    return;
+  }
+  const amps = mv * mult;
+  document.getElementById('s-result-amps').textContent    = amps.toFixed(3) + ' A';
+  document.getElementById('s-result-formula').textContent = `${mv} mV × ${mult} = ${amps.toFixed(3)} A`;
+}
+
+// Initialize mult display on load
+document.addEventListener('DOMContentLoaded', () => {
+  const mult = parseFloat(document.getElementById('s-type').value);
+  document.getElementById('s-mult').value = mult.toFixed(2);
+});
+
+// ── OHM'S LAW SOLVER ─────────────────────────────────────────────────────────
+// Tracks which fields the user has manually entered
+let ohmUserFields = new Set();
+
+function solveOhm(changed) {
+  const el = document.getElementById('ohm-' + changed);
+  if (el.value === '') {
+    ohmUserFields.delete(changed);
+    el.classList.remove('solved');
+  } else {
+    ohmUserFields.add(changed);
+    el.classList.remove('solved');
+  }
+
+  const vals = {};
+  ['e','i','r','p'].forEach(k => {
+    const v = parseFloat(document.getElementById('ohm-' + k).value);
+    if (!isNaN(v) && ohmUserFields.has(k)) vals[k] = v;
+  });
+
+  const known = Object.keys(vals);
+  if (known.length < 2) return;
+
+  // Clear solved fields
+  ['e','i','r','p'].forEach(k => {
+    if (!ohmUserFields.has(k)) {
+      document.getElementById('ohm-' + k).value = '';
+      document.getElementById('ohm-' + k).classList.remove('solved');
+    }
+  });
+
+  const set = (k, v) => {
+    if (!ohmUserFields.has(k)) {
+      const rounded = parseFloat(v.toFixed(4));
+      document.getElementById('ohm-' + k).value = rounded;
+      document.getElementById('ohm-' + k).classList.add('solved');
+    }
+  };
+
+  const e = vals.e, i = vals.i, r = vals.r, p = vals.p;
+
+  if (e !== undefined && i !== undefined) { set('r', e/i); set('p', e*i); }
+  else if (e !== undefined && r !== undefined) { set('i', e/r); set('p', (e*e)/r); }
+  else if (e !== undefined && p !== undefined) { set('i', p/e); set('r', (e*e)/p); }
+  else if (i !== undefined && r !== undefined) { set('e', i*r); set('p', (i*i)*r); }
+  else if (i !== undefined && p !== undefined) { set('e', p/i); set('r', p/(i*i)); }
+  else if (r !== undefined && p !== undefined) { set('e', Math.sqrt(p*r)); set('i', Math.sqrt(p/r)); }
+}
+
+function clearOhm() {
+  ohmUserFields.clear();
+  ['e','i','r','p'].forEach(k => {
+    const el = document.getElementById('ohm-' + k);
+    el.value = '';
+    el.classList.remove('solved');
+  });
+}
+
+// ── STATUS MSG ────────────────────────────────────────────────────────────────
+function setMsg(msg) {
+  const el = document.getElementById('status-msg');
+  if (el) el.textContent = msg;
+  setTimeout(() => { const e = document.getElementById('status-msg'); if (e) e.textContent = ''; }, 4000);
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+loadRectifier();
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js")
+      .then(reg => console.log("[CP Scout] SW registered:", reg.scope))
+      .catch(err => console.warn("[CP Scout] SW failed:", err));
+  });
+}
+</script>
+</body>
+</html>
