@@ -2,6 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1a8090">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CP Scout">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CP Scout — Cathodic Protection Field Analysis</title>
 <style>
@@ -122,6 +128,15 @@
   document.querySelectorAll('.nav-tab').forEach(tab => {
     if (tab.getAttribute('href') === page) tab.classList.add('active');
   });
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js")
+      .then(reg => console.log("[CP Scout] SW registered:", reg.scope))
+      .catch(err => console.warn("[CP Scout] SW failed:", err));
+  });
+}
 </script>
 </body>
 </html>

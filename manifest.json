@@ -1,0 +1,27 @@
+{
+  "name": "CP Scout — Cathodic Protection Field Analysis",
+  "short_name": "CP Scout",
+  "description": "Cathodic protection field analysis and troubleshooting platform for CP technicians.",
+  "start_url": "/index.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#2e3338",
+  "theme_color": "#1a8090",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["utilities", "productivity"],
+  "screenshots": []
+}
