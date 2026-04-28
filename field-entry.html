@@ -492,9 +492,10 @@ function expectedRange(rectAmps, pipePct, proxMult) {
 }
 
 function historicDelta(currentAmps, currentRect, histAmps, histRect) {
-  if (!histAmps || !histRect || !currentRect) return null;
-  const normCurrent = currentAmps / currentRect;
-  const normHistoric = histAmps / histRect;
+  if (!histAmps || !currentRect) return null;
+  const effectiveHistRect = histRect || currentRect; // use current rect as stand-in if not provided
+  const normCurrent  = currentAmps / currentRect;
+  const normHistoric = histAmps / effectiveHistRect;
   const deltaPct = ((normCurrent - normHistoric) / normHistoric) * 100;
   return deltaPct;
 }
@@ -508,34 +509,26 @@ function calcBondCheck() {
   const histRect = parseFloat(document.getElementById('bc-hist-rect').value) || null;
   const notes    = document.getElementById('bc-notes').value.trim();
 
-  if (!address)   { setMsg('Please enter a location address.'); return; }
+  if (!address)    { setMsg('Please enter a location address.'); return; }
   if (isNaN(amps)) { setMsg('Please enter an amp reading.'); return; }
 
   const rectAmps = rectData?.amps;
   if (!rectAmps) { setMsg('Please set rectifier output first.'); return; }
 
-  // Score based on % of rectifier output directly when no pipe % is available
-  // Simple ratio: actual / (rectAmps * proxMult * 0.1) as a neutral baseline
-  // If no pipe %, we compare actual vs rectifier-normalized expectation only
-  const pctOfRect = amps / rectAmps;
   const proxLabel = proximityLabel(String(proxMult));
+  let ratio, expStr;
 
-  // Build a ratio relative to proximity-weighted rectifier share
-  // Without pipe %, we use historical comparison as primary signal if available
-  let ratio = null;
-  let expStr = '—';
-
-  if (histAmps && histRect) {
-    // Historical comparison — normalize both to rectifier output
-    const normNow  = amps / rectAmps;
-    const normHist = histAmps / histRect;
-    ratio = normNow / normHist;
-    expStr = `~${(histAmps * rectAmps / histRect).toFixed(2)}A (hist. norm.)`;
+  if (histAmps) {
+    // Historical comparison is primary — use historic rect if provided, else current rect as stand-in
+    const effectiveHistRect = histRect || rectAmps;
+    const expectedAmp = histAmps * (rectAmps / effectiveHistRect);
+    ratio  = amps / expectedAmp;
+    expStr = `~${expectedAmp.toFixed(2)}A (from history${!histRect ? ', rect assumed equal' : ''})`;
   } else {
-    // No history, no pipe % — score on % of total rectifier output
-    // Flag anything over 30% of rectifier as suspicious for a single bond check
-    ratio = pctOfRect / 0.15; // 15% of rectifier = "normal" for a mid-size leg
-    expStr = `~${(rectAmps * 0.15 * proxMult).toFixed(2)}A (est. baseline)`;
+    // No history — fall back to 15% of rectifier baseline adjusted for proximity
+    const baseline = rectAmps * 0.15 * proxMult;
+    ratio  = amps / baseline;
+    expStr = `~${baseline.toFixed(2)}A (est. baseline)`;
   }
 
   const score = scoreAmps(amps, amps / ratio); // back-calculate expected from ratio
@@ -602,13 +595,12 @@ function calcDropCheck() {
 
   // Score: use historical if available, otherwise compare to rectifier % baseline
   let ratio, expStr;
-  if (histAmps && histRect) {
-    const normNow  = calcAmps / rectAmps;
-    const normHist = histAmps / histRect;
-    ratio  = normNow / normHist;
-    expStr = `~${(histAmps * rectAmps / histRect).toFixed(3)}A (hist. norm.)`;
+  if (histAmps) {
+    const effectiveHistRect = histRect || rectAmps;
+    const expectedAmp = histAmps * (rectAmps / effectiveHistRect);
+    ratio  = calcAmps / expectedAmp;
+    expStr = `~${expectedAmp.toFixed(3)}A (from history${!histRect ? ', rect assumed equal' : ''})`;
   } else {
-    // No history — use 15% of rectifier as neutral baseline for a segment
     const baseline = rectAmps * 0.15 * proxMult;
     ratio  = calcAmps / baseline;
     expStr = `~${baseline.toFixed(3)}A (est. baseline)`;
