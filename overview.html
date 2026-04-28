@@ -152,6 +152,7 @@
     <a class="nav-tab" href="trends.html">📈 Trends</a>
     <a class="nav-tab" href="field-entry.html">📋 Field Entry</a>
     <a class="nav-tab" href="report.html">📄 Report</a>
+    <a class="nav-tab" href="library.html">📚 Library</a>
   </div>
 </nav>
 
@@ -166,6 +167,8 @@
       <span class="uz-file" id="file-name">No file loaded</span>
     </div>
     <button class="parse-btn" onclick="parseAndRender()">▶ Analyze Data</button>
+    <button class="parse-btn" onclick="clearData()" style="background:rgba(240,64,64,0.15);border-color:var(--red);color:var(--red);">✕ Clear Data</button>
+    <button class="parse-btn" id="save-lib-btn" onclick="saveToLibrary()" style="display:none;background:rgba(77,217,232,0.1);border-color:var(--teal-dim);color:var(--teal);">📚 Save to Library</button>
     <span class="upload-msg" id="upload-msg">Upload a survey spreadsheet to begin analysis</span>
   <div id="no-limits-notice" style="display:none;font-size:10px;color:var(--yellow);background:rgba(232,208,32,0.1);border:1px solid var(--yellow);padding:4px 10px;letter-spacing:1px">
     ⚠ No lower limits loaded — upload full survey file (Book2) first to enable pass/fail analysis
@@ -708,6 +711,7 @@ function parseAndRender() {
   }
 
   document.getElementById('overview-content').innerHTML = html;
+  document.getElementById('save-lib-btn').style.display = '';
   setMsg(`Analysis complete — ${points.length} test points, ${records.length} readings processed.`);
 }
 
@@ -860,6 +864,76 @@ function toggleCard(detailId, tp) {
 
 function setMsg(msg) { document.getElementById('upload-msg').textContent = msg; }
 
+// ── SAVE TO LIBRARY ───────────────────────────────────────────────────────────
+const LIB_KEY = 'cp_library';
+
+function saveToLibrary() {
+  if (!rawData || !rawData.length) { setMsg('No data loaded to save.'); return; }
+
+  // Detect station from data
+  const cols = detectColumns(rawData);
+  let station = '';
+  for (let i = 1; i < rawData.length; i++) {
+    const s = String(rawData[i][cols.station] || '').trim();
+    if (s && /^\d+$/.test(s)) { station = s; break; }
+    if (s) { station = s; break; }
+  }
+
+  // Prompt for station confirmation/override
+  const input = prompt(
+    'Save to Library\n\nStation number detected: ' + (station || 'Unknown') +
+    '\n\nEnter station number (or press OK to confirm):',
+    station || ''
+  );
+  if (input === null) return; // cancelled
+  const finalStation = input.trim() || station || 'Unknown';
+
+  // Build metadata
+  const fname = localStorage.getItem(FNAME_KEY) || 'Unknown file';
+  const records = parseData(rawData);
+  const { points } = analyze(records);
+  const cycles = [...new Set(records.map(r => r.date.toISOString().slice(0,10)))].sort();
+  const dateRange = cycles.length
+    ? cycles[0] + ' → ' + cycles[cycles.length - 1]
+    : 'Unknown range';
+
+  // Load existing library
+  let library = [];
+  try { library = JSON.parse(localStorage.getItem(LIB_KEY) || '[]'); } catch(e) { library = []; }
+
+  // Check for duplicate (same station + filename)
+  const exists = library.find(e => e.station === finalStation && e.filename === fname);
+  if (exists) {
+    const overwrite = confirm(
+      'A file named "' + fname + '" for Station ' + finalStation +
+      ' already exists in the library.\n\nOverwrite it?'
+    );
+    if (!overwrite) return;
+    library = library.filter(e => !(e.station === finalStation && e.filename === fname));
+  }
+
+  const entry = {
+    id:         Date.now(),
+    station:    finalStation,
+    filename:   fname,
+    savedDate:  new Date().toISOString(),
+    dateRange,
+    tpCount:    points.length,
+    cycleCount: cycles.length,
+    data:       rawData   // full raw rows
+  };
+
+  library.push(entry);
+
+  try {
+    localStorage.setItem(LIB_KEY, JSON.stringify(library));
+    setMsg('Saved to Library — Station ' + finalStation + ', ' + points.length + ' TPs, ' + cycles.length + ' cycles.');
+  } catch(e) {
+    // Storage quota — data too large
+    setMsg('⚠ Could not save to library — storage quota exceeded. Try clearing old entries.');
+  }
+}
+
 // ── CLEAR DATA ────────────────────────────────────────────────────────────────
 function clearData() {
   rawData = [];
@@ -870,6 +944,7 @@ function clearData() {
   document.getElementById('file-name').textContent   = 'No file loaded';
   document.getElementById('upload-zone').classList.remove('has-file');
   document.getElementById('summary-row').style.display = 'none';
+  document.getElementById('save-lib-btn').style.display = 'none';
   document.getElementById('overview-content').innerHTML = `
     <div class="empty-state">
       <div class="es-icon">📊</div>
@@ -892,6 +967,7 @@ function clearData() {
       setMsg(`Cached data loaded (${rawData.length} rows) — click Analyze Data or upload new file.`);
       // Auto-analyze so results show immediately on return
       parseAndRender();
+      document.getElementById('save-lib-btn').style.display = '';
     }
   } catch(e) {
     rawData = [];
