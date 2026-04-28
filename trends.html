@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1a8090">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CP Scout">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CP Scout — Trends</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg:          #3a3f44;
+    --surface:     #2e3338;
+    --panel:       #4a5058;
+    --panel-light: #555c64;
+    --border:      #6a737d;
+    --teal:        #4dd9e8;
+    --teal-dim:    #2aabb8;
+    --teal-dark:   #1a8090;
+    --text:        #f0f4f5;
+    --text-dim:    #c0cdd0;
+    --text-muted:  #8a9ea3;
+    --red:         #f04040;
+    --orange:      #f08020;
+    --yellow:      #e8d020;
+    --green:       #30c860;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Courier New', monospace; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* NAV */
+  nav { background: var(--surface); border-bottom: 2px solid var(--teal-dark); display: flex; align-items: center; padding: 0 16px; flex-shrink: 0; height: 48px; }
+  .nav-brand .nav-logo { font-size: 14px; font-weight: bold; color: var(--teal); letter-spacing: 2px; text-transform: uppercase; text-shadow: 0 0 10px rgba(77,217,232,0.4); white-space: nowrap; }
+  .nav-tabs { display: flex; gap: 2px; flex: 1; margin-left: 20px; }
+  .nav-tab { padding: 0 16px; height: 48px; display: flex; align-items: center; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; color: var(--text-dim); border-bottom: 3px solid transparent; text-decoration: none; transition: all .15s; white-space: nowrap; }
+  .nav-tab:hover { color: var(--teal); background: rgba(77,217,232,0.05); }
+  .nav-tab.active { color: var(--teal); border-bottom-color: var(--teal); font-weight: bold; }
+
+  /* LAYOUT */
+  .main { display: flex; flex: 1; overflow: hidden; }
+
+  /* SIDEBAR */
+  .sidebar { width: 260px; background: var(--surface); border-right: 2px solid var(--teal-dark); display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
+  .sidebar-hdr { padding: 10px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .sidebar-hdr h2 { font-size: 10px; letter-spacing: 2px; color: var(--teal); text-transform: uppercase; font-weight: bold; }
+  .tp-count-badge { font-size: 9px; color: var(--text-muted); letter-spacing: 1px; }
+  .sidebar-search { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  .sidebar-search input { width: 100%; background: var(--panel); border: 1px solid var(--border); color: var(--text); padding: 6px 8px; font-size: 11px; font-family: inherit; }
+  .sidebar-search input:focus { outline: none; border-color: var(--teal); }
+  .sidebar-search input::placeholder { color: var(--text-muted); }
+  .tp-list { flex: 1; overflow-y: auto; }
+  .tp-list::-webkit-scrollbar { width: 5px; }
+  .tp-list::-webkit-scrollbar-track { background: var(--surface); }
+  .tp-list::-webkit-scrollbar-thumb { background: var(--border); }
+  .tp-item { padding: 9px 12px; cursor: pointer; border-bottom: 1px solid rgba(106,115,125,0.3); display: flex; align-items: center; gap: 8px; transition: background .1s; }
+  .tp-item:hover { background: rgba(77,217,232,0.06); }
+  .tp-item.active { background: rgba(77,217,232,0.12); border-left: 3px solid var(--teal); padding-left: 9px; }
+  .tp-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.2); }
+  .tp-item-info { flex: 1; min-width: 0; }
+  .tp-item-id { font-size: 11px; color: var(--teal); font-weight: bold; }
+  .tp-item-addr { font-size: 9px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+  .tp-item-right { text-align: right; flex-shrink: 0; }
+  .tp-item-val { font-size: 10px; color: var(--text-dim); }
+  .tp-item-trend { font-size: 11px; margin-top: 1px; }
+  .sidebar-footer { padding: 7px 12px; border-top: 1px solid var(--border); font-size: 9px; color: var(--text-muted); letter-spacing: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* CHART PANEL */
+  .chart-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* EMPTY / NO-SELECTION STATES */
+  .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: var(--text-muted); text-align: center; padding: 40px; }
+  .empty-state .es-icon { font-size: 48px; opacity: .35; }
+  .empty-state h2 { color: var(--text-dim); font-size: 14px; letter-spacing: 2px; text-transform: uppercase; }
+  .empty-state p { font-size: 11px; line-height: 1.8; max-width: 400px; }
+  .empty-btn { margin-top: 6px; padding: 8px 20px; background: transparent; border: 1px solid var(--teal); color: var(--teal); font-family: 'Courier New', monospace; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; text-decoration: none; display: inline-block; }
+  .empty-btn:hover { background: var(--teal-dark); color: #fff; }
+
+  /* CHART CONTENT */
+  .chart-content { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .chart-content::-webkit-scrollbar { width: 5px; }
+  .chart-content::-webkit-scrollbar-track { background: var(--bg); }
+  .chart-content::-webkit-scrollbar-thumb { background: var(--border); }
+
+  /* TP HEADER */
+  .tp-hdr { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .tp-hdr h1 { font-size: 20px; color: var(--teal); letter-spacing: 2px; }
+  .tp-hdr .tp-address { font-size: 11px; color: var(--text-dim); }
+  .tp-hdr .tp-status-badge { padding: 2px 10px; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; border: 1px solid; margin-left: auto; white-space: nowrap; }
+
+  /* STATS */
+  .stats-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .stat-box { background: var(--surface); border: 1px solid var(--border); padding: 10px 12px; }
+  .stat-label { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
+  .stat-val { font-size: 20px; font-weight: bold; color: var(--text); }
+  .stat-val.teal { color: var(--teal); }
+  .stat-val.sm { font-size: 14px; }
+  .stat-sub { font-size: 9px; color: var(--text-muted); margin-top: 3px; }
+
+  /* CHART CARD */
+  .chart-card { background: var(--surface); border: 1px solid var(--border); padding: 14px; }
+  .chart-card-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+  .chart-card-title { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--teal); font-weight: bold; }
+  .chart-legend { display: flex; gap: 14px; font-size: 9px; color: var(--text-dim); align-items: center; }
+  .l-off  { display:inline-block; width:18px; height:2px; background:#4dd9e8; vertical-align:middle; margin-right:4px; }
+  .l-on   { display:inline-block; width:18px; height:0; border-top:2px dashed #2aabb8; vertical-align:middle; margin-right:4px; }
+  .l-lim  { display:inline-block; width:18px; height:0; border-top:2px dashed #f04040; vertical-align:middle; margin-right:4px; }
+  .chart-wrap { position: relative; height: 280px; }
+
+  /* OVERVIEW GRID */
+  .overview-card { background: var(--surface); border: 1px solid var(--border); padding: 14px; }
+  .overview-title { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--teal); font-weight: bold; margin-bottom: 12px; }
+  .ov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 6px; }
+  .ov-item { background: var(--panel); border: 1px solid var(--border); padding: 7px 10px; cursor: pointer; transition: all .1s; display: flex; align-items: center; gap: 7px; }
+  .ov-item:hover { border-color: var(--teal); background: var(--panel-light); }
+  .ov-item.ov-active { border-color: var(--teal); background: rgba(77,217,232,0.1); }
+  .ov-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .ov-info { flex: 1; min-width: 0; }
+  .ov-tp { font-size: 10px; color: var(--teal); font-weight: bold; }
+  .ov-val { font-size: 9px; color: var(--text-dim); }
+  .ov-arrow { font-size: 11px; flex-shrink: 0; }
+
+  /* STATUS BAR */
+  .status-bar { background: var(--surface); border-top: 1px solid var(--border); padding: 5px 14px; font-size: 10px; color: var(--text-dim); letter-spacing: 1px; flex-shrink: 0; display: flex; gap: 20px; align-items: center; }
+  .s-label { color: var(--text-muted); }
+  .s-val { color: var(--teal); font-weight: bold; }
+  #status-msg { color: var(--text); margin-left: auto; font-style: italic; }
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: var(--surface); }
+  ::-webkit-scrollbar-thumb { background: var(--border); }
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-brand" href="index.html" style="text-decoration:none;">
+    <div class="nav-logo">⚡ CP Scout</div>
+  </a>
+  <div class="nav-tabs">
+    <a class="nav-tab" href="overview.html">📊 Overview</a>
+    <a class="nav-tab" href="map.html">🗺️ Map</a>
+    <a class="nav-tab active" href="trends.html">📈 Trends</a>
+    <a class="nav-tab" href="field-entry.html">📋 Field Entry</a>
+    <a class="nav-tab" href="report.html">📄 Report</a>
+  </div>
+</nav>
+
+<div class="main">
+
+  <div class="sidebar">
+    <div class="sidebar-hdr">
+      <h2>📈 Test Points</h2>
+      <span class="tp-count-badge" id="tp-count">—</span>
+    </div>
+    <div class="sidebar-search">
+      <input type="text" id="tp-search" placeholder="Search TP # or address..." oninput="filterList(this.value)">
+    </div>
+    <div class="tp-list" id="tp-list"></div>
+    <div class="sidebar-footer" id="sidebar-footer">No data loaded</div>
+  </div>
+
+  <div class="chart-panel" id="chart-panel"></div>
+
+</div>
+
+<div class="status-bar">
+  <span><span class="s-label">MODULE </span><span class="s-val">TRENDS</span></span>
+  <span><span class="s-label">SURVEY CYCLES </span><span class="s-val" id="sb-cycles">—</span></span>
+  <span><span class="s-label">TEST POINTS </span><span class="s-val" id="sb-tps">—</span></span>
+  <span id="status-msg"></span>
+</div>
+
+<script>
+// ── CONSTANTS ─────────────────────────────────────────────────────────────────
+const DATA_KEY  = 'cp409_surveyData';
+const FNAME_KEY = 'cp409_surveyFileName';
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let tpMap    = {};
+let tpKeys   = [];
+let filtered = [];
+let activeTP = null;
+let activeChart = null;
+
+// ── COLUMN DETECTION (mirrors overview.html exactly) ─────────────────────────
+function detectColumns(rows) {
+  const cols = { station:-1, point:-1, address:-1, read:-1, date:-1, readType:-1, lowerLimit:-1 };
+  const hdr  = rows[0] || [];
+  hdr.forEach((h, i) => {
+    const s = String(h).toLowerCase().trim();
+    if (s === 'area' || s === 'station')                             cols.station    = i;
+    if (s === 'point')                                               cols.point      = i;
+    if (s === 'location' || s === 'address')                         cols.address    = i;
+    if (s === 'read')                                                cols.read       = i;
+    if (s === 'read date' || s === 'read_date' || s === 'date')      cols.date       = i;
+    if (s.includes('measurement point characteristic') ||
+        s.includes('present read') || s === 'read type')             cols.readType   = i;
+    if (s === 'lower limit' || s === 'lower_limit' ||
+        s === 'current point lower limit')                           cols.lowerLimit = i;
+  });
+  if (cols.station  === -1) cols.station  = 2;
+  if (cols.point    === -1) cols.point    = 3;
+  if (cols.address  === -1) cols.address  = 6;
+  if (cols.read     === -1) cols.read     = 16;
+  if (cols.date     === -1) cols.date     = 19;
+  return cols;
+}
+
+function normTP(s) {
+  return String(s).replace(/TP\s*/i,'').replace(/\.000$/,'').replace(/\.0+$/,'').trim();
+}
+
+function loadSavedLimits(station) {
+  try {
+    const key = 'cp_limits_' + station.replace(/\s+/g,'_').toUpperCase();
+    const d   = localStorage.getItem(key);
+    return d ? JSON.parse(d) : {};
+  } catch(e) { return {}; }
+}
+
+// ── PARSE RAW ROWS ────────────────────────────────────────────────────────────
+function parseRows(rows) {
+  const cols = detectColumns(rows);
+  const tmp  = {};
+  let station = '';
+  const hasLimitCol    = cols.lowerLimit !== -1;
+  const extractedLimits = {};
+
+  // Pass 1: station name + limits
+  for (let i = 1; i < rows.length; i++) {
+    const row      = rows[i];
+    const pointRaw = String(row[cols.point] || '').trim();
+    if (!pointRaw || !/^tp\s*\d/i.test(pointRaw)) continue;
+    const tp  = normTP(pointRaw);
+    const sta = String(row[cols.station] || '').trim();
+    if (sta && !station) station = sta;
+
+    if (hasLimitCol) {
+      const rt    = cols.readType !== -1 ? String(row[cols.readType] || '').toUpperCase() : '';
+      const isOff = rt.includes('IO') || rt.includes(' I ');
+      const llStr = String(row[cols.lowerLimit] || '').replace(/[Vv\s]/g,'').trim();
+      const ll    = parseFloat(llStr);
+      if (!isNaN(ll) && (isOff || !extractedLimits[tp])) extractedLimits[tp] = ll;
+    }
+  }
+
+  const savedLimits = station ? loadSavedLimits(station) : {};
+
+  // Pass 2: build records
+  for (let i = 1; i < rows.length; i++) {
+    const row      = rows[i];
+    const pointRaw = String(row[cols.point] || '').trim();
+    if (!pointRaw || !/^tp\s*\d/i.test(pointRaw)) continue;
+    const tp = normTP(pointRaw);
+
+    const readStr = String(row[cols.read] || '').replace(/[Vv\s]/g,'').trim();
+    const read    = parseFloat(readStr);
+    if (isNaN(read)) continue;
+
+    let date = null;
+    const dv = row[cols.date];
+    if (dv instanceof Date) date = dv;
+    else if (dv) { const d = new Date(dv); if (!isNaN(d)) date = d; }
+    if (!date) continue;
+
+    const dateKey = date.getFullYear() + '-' + String(date.getMonth()+1).padStart(2,'0');
+
+    let readType = 'unknown';
+    if (cols.readType !== -1) {
+      const rt = String(row[cols.readType] || '').toUpperCase();
+      if (rt.includes('IO') || rt.includes(' I ')) readType = 'off';
+      else if (rt.includes('ON'))                  readType = 'on';
+    }
+
+    const address  = String(row[cols.address] || '').trim();
+    const offLimit = extractedLimits[tp] ?? savedLimits[tp] ?? null;
+
+    if (!tmp[tp]) tmp[tp] = { address, cycles: {}, offLimit };
+    if (!tmp[tp].cycles[dateKey]) tmp[tp].cycles[dateKey] = { off: null, on: null };
+
+    if (readType === 'off' && tmp[tp].cycles[dateKey].off === null)
+      tmp[tp].cycles[dateKey].off = read;
+    else if (readType === 'on' && tmp[tp].cycles[dateKey].on === null)
+      tmp[tp].cycles[dateKey].on = read;
+    else if (readType === 'unknown' && tmp[tp].cycles[dateKey].off === null)
+      tmp[tp].cycles[dateKey].off = read;
+  }
+
+  // Convert to sorted arrays (newest first)
+  const result = {};
+  for (const [tp, data] of Object.entries(tmp)) {
+    result[tp] = {
+      address:  data.address,
+      offLimit: data.offLimit,
+      cycles: Object.entries(data.cycles)
+        .map(([dk, v]) => ({ dateKey: dk, off: v.off, on: v.on }))
+        .sort((a, b) => b.dateKey.localeCompare(a.dateKey))
+    };
+  }
+  return result;
+}
+
+// ── SCORING ───────────────────────────────────────────────────────────────────
+function scorePoint(tp) {
+  const d = tpMap[tp];
+  if (!d || !d.cycles.length) return { color: '#6a737d', label: 'NO DATA' };
+  const c = d.cycles[0];
+  if (c.off === null) return { color: '#6a737d', label: 'NO DATA' };
+  if (d.offLimit !== null && c.off > d.offLimit) return { color: '#f04040', label: 'FAILING' };
+  const diff = c.off !== null && c.on !== null ? Math.round((c.on - c.off) * 1000) : null;
+  if (diff !== null && diff <= 25) return { color: '#f04040', label: 'CRITICAL' };
+  if (diff !== null && diff <= 40) return { color: '#f08020', label: 'HIGH CONCERN' };
+  if (diff !== null && diff <= 55) return { color: '#e8d020', label: 'MONITOR' };
+  return { color: '#30c860', label: 'PASSING' };
+}
+
+// Color for individual data point dots relative to this TP's own history
+function dotColor(off, cycles) {
+  if (off === null) return '#6a737d';
+  const offs = cycles.filter(c => c.off !== null).map(c => c.off);
+  if (offs.length < 2) return '#4dd9e8';
+  const best  = Math.min(...offs); // most negative = best
+  const worst = Math.max(...offs); // least negative = worst
+  const rng   = worst - best || 0.001;
+  const pct   = (worst - off) / rng; // 0=worst, 1=best
+  if (pct < 0.25) return '#f04040';
+  if (pct < 0.50) return '#f08020';
+  if (pct < 0.75) return '#e8d020';
+  return '#30c860';
+}
+
+function trendLabel(cycles) {
+  const offs = cycles.slice(0, 3).map(c => c.off).filter(v => v !== null);
+  if (offs.length < 2) return { text: 'INSUFFICIENT DATA', color: '#8a9ea3', arrow: '—' };
+  // More negative = better. delta > 0 means latest is LESS negative than oldest of last 3 = declining
+  const delta   = offs[0] - offs[offs.length - 1]; // positive = worsening
+  const absMV   = Math.abs(delta * 1000);
+  if (absMV < 10)  return { text: 'STABLE',          color: '#30c860', arrow: '→' };
+  if (delta < 0)   return { text: 'IMPROVING',        color: '#30c860', arrow: '↑' };
+  if (absMV < 35)  return { text: 'SLIGHT DECLINE',   color: '#e8d020', arrow: '↘' };
+  return             { text: 'DECLINING',              color: '#f04040', arrow: '↓' };
+}
+
+function largestDrop(cycles) {
+  let max = 0;
+  for (let i = 0; i < cycles.length - 1; i++) {
+    const cur  = cycles[i].off;
+    const prev = cycles[i+1].off;
+    if (cur === null || prev === null) continue;
+    const drop = (cur - prev) * 1000; // positive = worsened
+    if (drop > max) max = drop;
+  }
+  return max > 0 ? Math.round(max) : null;
+}
+
+// ── SIDEBAR ───────────────────────────────────────────────────────────────────
+function renderList() {
+  const list = document.getElementById('tp-list');
+  if (!filtered.length) {
+    list.innerHTML = '<div style="padding:16px;font-size:10px;color:var(--text-muted);text-align:center;letter-spacing:1px">NO RESULTS</div>';
+    return;
+  }
+  list.innerHTML = filtered.map(tp => {
+    const d      = tpMap[tp];
+    const score  = scorePoint(tp);
+    const trend  = trendLabel(d.cycles);
+    const latest = d.cycles[0];
+    const offVal = latest && latest.off !== null ? (latest.off * 1000).toFixed(0) + 'mV' : '—';
+    return `<div class="tp-item${tp === activeTP ? ' active' : ''}" onclick="selectTP('${tp}')">
+      <div class="tp-dot" style="background:${score.color}"></div>
+      <div class="tp-item-info">
+        <div class="tp-item-id">TP ${tp}</div>
+        <div class="tp-item-addr">${d.address || '—'}</div>
+      </div>
+      <div class="tp-item-right">
+        <div class="tp-item-val">${offVal}</div>
+        <div class="tp-item-trend" style="color:${trend.color}">${trend.arrow}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function filterList(q) {
+  const ql = q.toLowerCase().trim();
+  filtered = ql
+    ? tpKeys.filter(tp => tp.toLowerCase().includes(ql) || (tpMap[tp].address||'').toLowerCase().includes(ql))
+    : [...tpKeys];
+  renderList();
+}
+
+// ── SELECT ────────────────────────────────────────────────────────────────────
+function selectTP(tp) {
+  activeTP = tp;
+  renderList();
+  renderChart(tp);
+  setTimeout(() => {
+    const el = document.querySelector('.tp-item.active');
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }, 30);
+}
+
+// ── RENDER CHART ──────────────────────────────────────────────────────────────
+function renderChart(tp) {
+  const d = tpMap[tp];
+  if (!d) return;
+
+  const score  = scorePoint(tp);
+  const trend  = trendLabel(d.cycles);
+  const latest = d.cycles[0] || { off: null, on: null };
+  const drop   = largestDrop(d.cycles);
+
+  const offLatest = latest.off !== null ? (latest.off * 1000).toFixed(0) + ' mV' : '—';
+  const onLatest  = latest.on  !== null ? (latest.on  * 1000).toFixed(0) + ' mV' : '—';
+  const diffVal   = latest.off !== null && latest.on !== null
+    ? Math.round((latest.on - latest.off) * 1000) + ' mV' : '—';
+  const limitDisp = d.offLimit !== null ? (d.offLimit * 1000).toFixed(0) + ' mV' : 'NOT SET';
+  const dropColor = drop === null ? 'var(--text)' : drop >= 50 ? 'var(--red)' : drop >= 35 ? 'var(--orange)' : 'var(--text)';
+  const dateRange = d.cycles.length > 1
+    ? d.cycles[d.cycles.length-1].dateKey + ' → ' + d.cycles[0].dateKey
+    : d.cycles.length === 1 ? d.cycles[0].dateKey : '—';
+
+  document.getElementById('chart-panel').innerHTML = `
+    <div class="chart-content" id="chart-content">
+
+      <div class="tp-hdr">
+        <h1>TP ${tp}</h1>
+        <span class="tp-address">${d.address || '—'}</span>
+        <span class="tp-status-badge" style="color:${score.color};border-color:${score.color}">${score.label}</span>
+      </div>
+
+      <div class="stats-strip">
+        <div class="stat-box">
+          <div class="stat-label">Latest Off-Read</div>
+          <div class="stat-val teal">${offLatest}</div>
+          <div class="stat-sub">Instant-off potential</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Latest On-Read</div>
+          <div class="stat-val">${onLatest}</div>
+          <div class="stat-sub">Structure-to-soil</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">ON/OFF Gap</div>
+          <div class="stat-val">${diffVal}</div>
+          <div class="stat-sub">IR drop component</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Survey Cycles</div>
+          <div class="stat-val teal">${d.cycles.length}</div>
+          <div class="stat-sub">${dateRange}</div>
+        </div>
+      </div>
+
+      <div class="stats-strip">
+        <div class="stat-box">
+          <div class="stat-label">Trend Direction</div>
+          <div class="stat-val sm" style="color:${trend.color}">${trend.arrow} ${trend.text}</div>
+          <div class="stat-sub">Based on last 3 cycles</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Largest Single-Cycle Drop</div>
+          <div class="stat-val sm" style="color:${dropColor}">${drop !== null ? '▼ ' + drop + ' mV' : 'None detected'}</div>
+          <div class="stat-sub">${drop !== null && drop >= 50 ? 'SIGNIFICANT — investigate' : drop !== null && drop >= 35 ? 'Notable — monitor closely' : 'All cycles within normal range'}</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Lower Limit</div>
+          <div class="stat-val sm" style="color:${d.offLimit !== null ? 'var(--red)' : 'var(--text-muted)'}">${limitDisp}</div>
+          <div class="stat-sub">${d.offLimit !== null ? 'Threshold from survey file' : 'Upload Book2 to load limits'}</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Latest Cycle</div>
+          <div class="stat-val sm teal">${d.cycles[0] ? d.cycles[0].dateKey : '—'}</div>
+          <div class="stat-sub">Most recent survey date</div>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-card-hdr">
+          <span class="chart-card-title">MV Potential History — TP ${tp}</span>
+          <span class="chart-legend">
+            <span style="color:#4dd9e8"><span class="l-off"></span>Off-Read</span>
+            <span style="color:#2aabb8"><span class="l-on"></span>On-Read</span>
+            ${d.offLimit !== null ? '<span style="color:#f04040"><span class="l-lim"></span>Limit</span>' : ''}
+          </span>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="main-chart"></canvas>
+        </div>
+      </div>
+
+      <div class="overview-card">
+        <div class="overview-title">All Test Points — Quick Overview</div>
+        <div class="ov-grid" id="ov-grid"></div>
+      </div>
+
+    </div>`;
+
+  drawChart(tp, d);
+  renderOverviewGrid(tp);
+  setMsg('TP ' + tp + ' — ' + d.cycles.length + ' survey cycle' + (d.cycles.length !== 1 ? 's' : '') + ' loaded');
+}
+
+// ── CHART.JS ──────────────────────────────────────────────────────────────────
+function drawChart(tp, d) {
+  if (activeChart) { activeChart.destroy(); activeChart = null; }
+  const canvas = document.getElementById('main-chart');
+  if (!canvas) return;
+
+  // Chronological order for chart (oldest → newest)
+  const chrono = [...d.cycles].reverse();
+  const labels  = chrono.map(c => c.dateKey);
+  const offData = chrono.map(c => c.off !== null ? parseFloat((c.off * 1000).toFixed(1)) : null);
+  const onData  = chrono.map(c => c.on  !== null ? parseFloat((c.on  * 1000).toFixed(1)) : null);
+  const ptColors = chrono.map(c => dotColor(c.off, d.cycles));
+
+  const datasets = [
+    {
+      label: 'Off-Read (mV)',
+      data: offData,
+      borderColor: '#4dd9e8',
+      backgroundColor: 'rgba(77,217,232,0.06)',
+      borderWidth: 2,
+      pointBackgroundColor: ptColors,
+      pointBorderColor: ptColors,
+      pointRadius: 5,
+      pointHoverRadius: 7,
+      tension: 0.3,
+      spanGaps: true,
+    },
+    {
+      label: 'On-Read (mV)',
+      data: onData,
+      borderColor: '#2aabb8',
+      borderDash: [6, 4],
+      borderWidth: 2,
+      pointBackgroundColor: '#2aabb8',
+      pointBorderColor: '#2aabb8',
+      pointRadius: 4,
+      pointHoverRadius: 6,
+      tension: 0.3,
+      spanGaps: true,
+      fill: false,
+    }
+  ];
+
+  if (d.offLimit !== null) {
+    const limitMV = parseFloat((d.offLimit * 1000).toFixed(1));
+    datasets.push({
+      label: 'Lower Limit',
+      data: labels.map(() => limitMV),
+      borderColor: '#f04040',
+      borderDash: [4, 4],
+      borderWidth: 1.5,
+      pointRadius: 0,
+      pointHoverRadius: 0,
+      fill: false,
+    });
+  }
+
+  // Y axis range
+  const allMV = [...offData, ...onData, d.offLimit !== null ? d.offLimit * 1000 : null]
+    .filter(v => v !== null);
+  const minMV = allMV.length ? Math.min(...allMV) : -1200;
+  const maxMV = allMV.length ? Math.max(...allMV) : -500;
+  const pad   = Math.max((maxMV - minMV) * 0.12, 50);
+
+  activeChart = new Chart(canvas, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(30,38,42,0.97)',
+          borderColor: '#1a8090',
+          borderWidth: 1,
+          titleColor: '#4dd9e8',
+          bodyColor: '#c0cdd0',
+          padding: 10,
+          titleFont: { family: 'Courier New', size: 11 },
+          bodyFont:  { family: 'Courier New', size: 10 },
+          callbacks: {
+            label: ctx => ctx.parsed.y !== null
+              ? ' ' + ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(0) + ' mV'
+              : null
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid:  { color: 'rgba(106,115,125,0.3)' },
+          ticks: { color: '#8a9ea3', font: { family: 'Courier New', size: 10 }, maxRotation: 45 }
+        },
+        y: {
+          reverse: true,   // inverted: more negative (better protection) = higher on chart
+          min: minMV - pad,
+          max: maxMV + pad,
+          grid:  { color: 'rgba(106,115,125,0.3)' },
+          ticks: {
+            color: '#8a9ea3',
+            font: { family: 'Courier New', size: 10 },
+            callback: v => v.toFixed(0) + ' mV'
+          }
+        }
+      }
+    }
+  });
+}
+
+// ── OVERVIEW GRID ─────────────────────────────────────────────────────────────
+function renderOverviewGrid(activeTp) {
+  const grid = document.getElementById('ov-grid');
+  if (!grid) return;
+  grid.innerHTML = tpKeys.map(tp => {
+    const d      = tpMap[tp];
+    const score  = scorePoint(tp);
+    const trend  = trendLabel(d.cycles);
+    const latest = d.cycles[0];
+    const offVal = latest && latest.off !== null ? (latest.off * 1000).toFixed(0) + 'mV' : '—';
+    return `<div class="ov-item${tp === activeTp ? ' ov-active' : ''}" onclick="selectTP('${tp}')">
+      <div class="ov-dot" style="background:${score.color}"></div>
+      <div class="ov-info">
+        <div class="ov-tp">TP ${tp}</div>
+        <div class="ov-val">${offVal}</div>
+      </div>
+      <div class="ov-arrow" style="color:${trend.color}">${trend.arrow}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── SHOW STATES ───────────────────────────────────────────────────────────────
+function showNoData() {
+  document.getElementById('chart-panel').innerHTML = `
+    <div class="empty-state">
+      <div class="es-icon">📈</div>
+      <h2>No Survey Data Found</h2>
+      <p>No survey data was found in storage.<br>Upload a spreadsheet in Overview first, then return here to view historical MV potential trends.</p>
+      <a class="empty-btn" href="overview.html">→ Go to Overview</a>
+    </div>`;
+}
+
+function showNoSelection() {
+  document.getElementById('chart-panel').innerHTML = `
+    <div class="empty-state">
+      <div class="es-icon">📈</div>
+      <h2>Select a Test Point</h2>
+      <p>Choose a test point from the sidebar to view its historical MV potential trend chart, summary stats, and all-points overview.</p>
+    </div>`;
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+function init() {
+  let rawData = [];
+  try {
+    const saved = localStorage.getItem(DATA_KEY);
+    if (saved) rawData = JSON.parse(saved);
+  } catch(e) { rawData = []; }
+
+  if (!rawData || rawData.length < 2) {
+    showNoData();
+    document.getElementById('tp-list').innerHTML =
+      '<div style="padding:16px;font-size:10px;color:var(--text-muted);text-align:center;letter-spacing:1px">NO DATA</div>';
+    document.getElementById('sidebar-footer').textContent = 'No data loaded';
+    return;
+  }
+
+  tpMap  = parseRows(rawData);
+  tpKeys = Object.keys(tpMap).sort((a, b) => {
+    const na = parseFloat(a), nb = parseFloat(b);
+    return (!isNaN(na) && !isNaN(nb)) ? na - nb : a.localeCompare(b);
+  });
+  filtered = [...tpKeys];
+
+  // Count unique survey cycles across all TPs
+  const allCycles = new Set();
+  for (const d of Object.values(tpMap)) d.cycles.forEach(c => allCycles.add(c.dateKey));
+
+  document.getElementById('tp-count').textContent         = tpKeys.length + ' TPs';
+  document.getElementById('sb-cycles').textContent        = allCycles.size;
+  document.getElementById('sb-tps').textContent           = tpKeys.length;
+  document.getElementById('sidebar-footer').textContent   = localStorage.getItem(FNAME_KEY) || 'Data loaded';
+
+  renderList();
+  showNoSelection();
+}
+
+function setMsg(msg) {
+  const el = document.getElementById('status-msg');
+  if (el) el.textContent = msg;
+  setTimeout(() => { const e = document.getElementById('status-msg'); if (e) e.textContent = ''; }, 4000);
+}
+
+init();
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js")
+      .then(reg => console.log("[CP Scout] SW registered:", reg.scope))
+      .catch(err => console.warn("[CP Scout] SW failed:", err));
+  });
+}
+</script>
+</body>
+</html>
