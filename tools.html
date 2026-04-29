@@ -147,12 +147,17 @@
   .ohm-input-block input::placeholder { color: var(--text-muted); font-size: 11px; }
   .ohm-hint { font-size: 9px; color: var(--text-muted); letter-spacing: 1px; margin-top: 8px; }
 
-  /* USEFUL FORMULAS */
-  .formula-list { display: flex; flex-direction: column; gap: 10px; }
-  .formula-item { background: var(--panel); border: 1px solid var(--border); padding: 12px 14px; display: flex; gap: 14px; align-items: flex-start; }
-  .formula-num { font-size: 11px; color: var(--teal); font-weight: bold; min-width: 22px; }
-  .formula-text { font-size: 11px; color: var(--text-dim); line-height: 1.7; }
-  .formula-eq { font-size: 12px; color: var(--text); font-weight: bold; margin-top: 4px; }
+  .formula-var-list { display: flex; flex-direction: column; gap: 3px; margin: 6px 0 4px 0; }
+  .formula-var { font-size: 10px; color: var(--text-dim); padding-left: 10px; border-left: 2px solid var(--border); line-height: 1.6; }
+  .formula-var .fv-key { color: var(--teal); font-weight: bold; }
+  .formula-purpose { font-size: 10px; color: var(--text-muted); margin-top: 6px; font-style: italic; line-height: 1.6; }
+  .notes-block { background: rgba(77,217,232,0.04); border: 1px solid var(--teal-dark); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .notes-block .nb-title { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--teal); font-weight: bold; margin-bottom: 2px; }
+  .notes-block .nb-item { font-size: 11px; color: var(--text-dim); line-height: 1.7; padding-left: 10px; border-left: 2px solid var(--teal-dark); }
+  .notes-block .nb-item b { color: var(--text); }
+  .abbrev-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; margin-top: 4px; }
+  .abbrev-item { background: var(--panel); border: 1px solid var(--border); padding: 6px 10px; font-size: 10px; }
+  .abbrev-item .ab-key { color: var(--teal); font-weight: bold; margin-right: 6px; }
 
   /* STATUS BAR */
   .status-bar { background: var(--surface); border-top: 1px solid var(--border); padding: 5px 14px; font-size: 10px; color: var(--text-dim); letter-spacing: 1px; flex-shrink: 0; display: flex; gap: 20px; align-items: center; }
@@ -212,7 +217,7 @@
       </div>
       <div class="tool-item" onclick="showTool('formulas')">
         <span class="tool-icon">📏</span>
-        <span class="tool-label">Useful Formulas</span>
+        <span class="tool-label">CP Formulas</span>
       </div>
     </div>
   </div>
@@ -664,63 +669,101 @@
     ══════════════════════════════════════════════════════════ -->
     <div class="tool-section" id="tool-formulas">
       <div>
-        <div class="tool-title"><span class="tool-title-icon">📏</span>Useful Field Formulas</div>
-        <div class="tool-subtitle">Geometry and unit conversion reference — from Farwest Corrosion Control field card</div>
+        <div class="tool-title"><span class="tool-title-icon">📏</span>CP Field Formulas</div>
+        <div class="tool-subtitle">Cathodic protection formulas — NACE/AMPP standards reference</div>
       </div>
 
       <div class="card">
         <div class="formula-list">
+
           <div class="formula-item">
             <div class="formula-num">1</div>
-            <div>
-              <div class="formula-text">To calculate the circumference of a circle, multiply the diameter by 3.1416.</div>
-              <div class="formula-eq">C = d × 3.1416</div>
+            <div style="flex:1">
+              <div class="formula-text" style="color:var(--text);font-weight:bold;margin-bottom:4px">Wenner 4-Pin Method — Soil Resistivity</div>
+              <div class="formula-eq">ρ = 191.5 × a × R</div>
+              <div class="formula-var-list">
+                <div class="formula-var"><span class="fv-key">ρ (rho)</span> — Soil resistivity (Ohm-cm)</div>
+                <div class="formula-var"><span class="fv-key">a</span> — Electrode spacing (feet) — also represents depth of investigation</div>
+                <div class="formula-var"><span class="fv-key">R</span> — Resistance measured by soil resistance meter (Ohms)</div>
+              </div>
+              <div class="formula-purpose">Standard field method for determining soil resistivity. Wider spacing = deeper investigation.</div>
             </div>
           </div>
+
           <div class="formula-item">
             <div class="formula-num">2</div>
-            <div>
-              <div class="formula-text">To calculate the area of a circle, multiply 3.1416 by the square of the radius.</div>
-              <div class="formula-eq">A = 3.1416 × r²</div>
+            <div style="flex:1">
+              <div class="formula-text" style="color:var(--text);font-weight:bold;margin-bottom:4px">Anode Consumption — Faraday's Law</div>
+              <div class="formula-eq">W = K × I × t</div>
+              <div class="formula-var-list">
+                <div class="formula-var"><span class="fv-key">W</span> — Weight loss / mass consumed</div>
+                <div class="formula-var"><span class="fv-key">K</span> — Electrochemical equivalent (mass consumed per ampere-year)</div>
+                <div class="formula-var"><span class="fv-key">I</span> — Current (Amperes)</div>
+                <div class="formula-var"><span class="fv-key">t</span> — Time (years)</div>
+              </div>
+              <div class="formula-purpose">Calculates theoretical mass of an anode required to provide a specific current for a set lifespan.</div>
             </div>
           </div>
+
           <div class="formula-item">
             <div class="formula-num">3</div>
-            <div>
-              <div class="formula-text">To calculate the area of a triangle, multiply the base by ½ the perpendicular height.</div>
-              <div class="formula-eq">A = base × (height ÷ 2)</div>
+            <div style="flex:1">
+              <div class="formula-text" style="color:var(--text);font-weight:bold;margin-bottom:4px">Ohm's Law</div>
+              <div class="formula-eq">V = I × R</div>
+              <div class="formula-var-list">
+                <div class="formula-var"><span class="fv-key">V</span> — Potential difference (Volts)</div>
+                <div class="formula-var"><span class="fv-key">I</span> — Current (Amperes)</div>
+                <div class="formula-var"><span class="fv-key">R</span> — Resistance (Ohms)</div>
+              </div>
+              <div class="formula-purpose">Core relationship for calculating voltage drops, current flow, and circuit resistance in both ICCP and galvanic systems. See the Ohm's Law tool for the interactive solver.</div>
             </div>
           </div>
+
           <div class="formula-item">
             <div class="formula-num">4</div>
-            <div>
-              <div class="formula-text">To calculate the area of a cylinder, multiply the circumference by the length.</div>
-              <div class="formula-eq">A = (d × 3.1416) × length</div>
+            <div style="flex:1">
+              <div class="formula-text" style="color:var(--text);font-weight:bold;margin-bottom:4px">IR Drop — Voltage Drop Correction</div>
+              <div class="formula-eq">V<sub>measured</sub> = V<sub>polarized</sub> + (I × R<sub>soil</sub>)</div>
+              <div class="formula-var-list">
+                <div class="formula-var"><span class="fv-key">V<sub>measured</sub></span> — Total voltage read by the voltmeter</div>
+                <div class="formula-var"><span class="fv-key">V<sub>polarized</sub></span> — Actual potential of structure relative to electrolyte</div>
+                <div class="formula-var"><span class="fv-key">I × R<sub>soil</sub></span> — Error voltage caused by current flowing through soil resistance</div>
+              </div>
+              <div class="formula-purpose">Isolates the true polarized potential of the pipe from errors introduced by current flowing through soil resistance — the basis for instant-off readings.</div>
             </div>
           </div>
+
           <div class="formula-item">
             <div class="formula-num">5</div>
-            <div>
-              <div class="formula-text">To calculate the volume of a cylinder, multiply the area of the end by the length.</div>
-              <div class="formula-eq">V = (3.1416 × r²) × length</div>
+            <div style="flex:1">
+              <div class="formula-text" style="color:var(--text);font-weight:bold;margin-bottom:4px">Current Density</div>
+              <div class="formula-eq">J = I / A</div>
+              <div class="formula-var-list">
+                <div class="formula-var"><span class="fv-key">J</span> — Current density (mA/m² or mA/ft²)</div>
+                <div class="formula-var"><span class="fv-key">I</span> — Total current required (mA)</div>
+                <div class="formula-var"><span class="fv-key">A</span> — Total surface area of structure (m² or ft²)</div>
+              </div>
+              <div class="formula-purpose">Determines total current required for protection based on the surface area and coating efficiency of the pipeline.</div>
             </div>
           </div>
-          <div class="formula-item">
-            <div class="formula-num">6</div>
-            <div>
-              <div class="formula-text">A gallon of water weighs 8.25 pounds and contains 231 cubic inches.</div>
-              <div class="formula-eq">1 gal = 8.25 lb = 231 in³ = 7.48 gal/ft³</div>
-            </div>
-          </div>
-          <div class="formula-item">
-            <div class="formula-num">7</div>
-            <div>
-              <div class="formula-text">A cubic foot of water contains 7.48 gallons and weighs 62.5 pounds. Contains 1728 cubic inches.</div>
-              <div class="formula-eq">1 ft³ = 7.48 gal = 62.5 lb = 1728 in³</div>
-            </div>
-          </div>
+
         </div>
       </div>
+
+      <!-- Field Notes -->
+      <div class="notes-block">
+        <div class="nb-title">📋 Field Use Notes</div>
+        <div class="nb-item"><b>Data Integrity:</b> Always record the reference electrode used when documenting readings — e.g., CSE (Copper-Copper Sulfate Electrode).</div>
+        <div class="nb-item"><b>Environmental Factors (San Diego):</b> High-moisture seasons and coastal proximity lower R in the Wenner formula, requiring different current output adjustments compared to dry summer months.</div>
+        <div class="nb-title" style="margin-top:4px">Abbreviations</div>
+        <div class="abbrev-grid">
+          <div class="abbrev-item"><span class="ab-key">AMPP</span>Association for Materials Protection and Performance (formerly NACE)</div>
+          <div class="abbrev-item"><span class="ab-key">ICCP</span>Impressed Current Cathodic Protection</div>
+          <div class="abbrev-item"><span class="ab-key">CSE</span>Copper-Copper Sulfate Electrode</div>
+          <div class="abbrev-item"><span class="ab-key">CP</span>Cathodic Protection</div>
+        </div>
+      </div>
+
     </div>
 
   </div><!-- end content-panel -->
