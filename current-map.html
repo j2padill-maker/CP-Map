@@ -198,6 +198,7 @@
         <div class="uz-filename" id="pdf-filename">No file loaded</div>
       </div>
       <button class="apply-btn" onclick="loadFieldEntries()">↻ Load Field Entries</button>
+      <button class="apply-btn secondary" style="margin-top:4px" onclick="clearMap()">✕ Clear Map</button>
       <button class="apply-btn secondary" style="margin-top:4px" onclick="window.location.href='field-entry.html'">→ Go to Field Entry</button>
     </div>
 
@@ -343,8 +344,42 @@ const STORAGE_ARROWS = 'cm_arrows';
 const STORAGE_PDF    = 'cm_pdf_name';
 const KEY_FE         = 'fe_results';
 const KEY_FE_RECT    = 'fe_rectifier';
-const DIAMOND_R      = 14; // half-size of diamond in logical px
-const ARROW_LEN      = 28; // total arrow length in logical px — matches diamond scale
+const DIAMOND_R      = 14;
+const ARROW_LEN      = 28;
+
+// ── INDEXEDDB — raw ArrayBuffer, same pattern as map.html ─────────────────────
+const IDB_NAME = 'cpscout', IDB_STORE = 'blobs', IDB_VER = 1;
+function openIDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(IDB_NAME, IDB_VER);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE);
+    req.onsuccess = e => res(e.target.result);
+    req.onerror   = e => rej(e.target.error);
+  });
+}
+async function idbSet(key, val) {
+  const db = await openIDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(val, key);
+    tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+  });
+}
+async function idbGet(key) {
+  const db = await openIDB();
+  return new Promise((res, rej) => {
+    const req = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(key);
+    req.onsuccess = e => res(e.target.result); req.onerror = e => rej(e.target.error);
+  });
+}
+async function idbDel(key) {
+  const db = await openIDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).delete(key);
+    tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+  });
+}
 
 const COLORS = {
   red:       { fill: 'rgba(240,64,64,0.15)',    stroke: '#f04040' },
@@ -456,20 +491,29 @@ function loadFieldEntries() {
 async function loadPDF(input) {
   const file = input.files[0];
   if (!file) return;
-  document.getElementById('pdf-filename').textContent = file.name;
-  document.getElementById('upload-zone').classList.add('has-file');
+  const buf = await file.arrayBuffer();
+  await idbSet('cm_pdfData', buf);
   localStorage.setItem(STORAGE_PDF, file.name);
+  await renderPDFFromBuffer(buf, file.name);
+}
 
-  const arrayBuf = await file.arrayBuffer();
-  pdfDoc = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
-  pageNum = 1;
-  await renderPage();
-  document.getElementById('drop-prompt').style.display = 'none';
-  document.getElementById('pdf-controls').style.display = 'flex';
-  document.getElementById('legend-toggle').style.display = 'block';
-  document.getElementById('legend-float').style.display = 'block';
-  drawOverlay();
-  setMsg('Map loaded — ' + file.name);
+async function renderPDFFromBuffer(buf, name) {
+  document.getElementById('pdf-filename').textContent = name || 'Cached PDF';
+  document.getElementById('upload-zone').classList.add('has-file');
+  setMsg('Loading PDF…');
+  try {
+    pdfDoc  = await pdfjsLib.getDocument({ data: buf }).promise;
+    pageNum = 1;
+    await renderPage();
+    document.getElementById('drop-prompt').style.display  = 'none';
+    document.getElementById('pdf-controls').style.display = 'flex';
+    document.getElementById('legend-toggle').style.display = 'block';
+    document.getElementById('legend-float').style.display  = 'block';
+    drawOverlay();
+    setMsg('Map loaded — ' + name);
+  } catch(e) {
+    setMsg('Error loading PDF: ' + e.message);
+  }
 }
 
 async function renderPage() {
@@ -1304,6 +1348,25 @@ function clearAll() {
   setMsg('All pins and arrows cleared.');
 }
 
+async function clearMap() {
+  if (!confirm('Remove the uploaded PDF map? Pins and arrows will be kept.\n\nUpload a new PDF to replace it.')) return;
+  await idbDel('cm_pdfData');
+  localStorage.removeItem(STORAGE_PDF);
+  pdfDoc  = null;
+  pdfPage = null;
+  mapCtx.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
+  overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  mapCanvas.width  = 0; mapCanvas.height  = 0;
+  overlayCanvas.width = 0; overlayCanvas.height = 0;
+  document.getElementById('pdf-filename').textContent = 'No file loaded';
+  document.getElementById('upload-zone').classList.remove('has-file');
+  document.getElementById('drop-prompt').style.display  = 'block';
+  document.getElementById('pdf-controls').style.display = 'none';
+  document.getElementById('legend-toggle').style.display = 'none';
+  document.getElementById('legend-float').style.display  = 'none';
+  setMsg('Map cleared. Upload a new PDF to continue.');
+}
+
 function toggleLegend() {
   const l = document.getElementById('legend-float');
   l.style.display = l.style.display === 'none' ? 'block' : 'none';
@@ -1318,6 +1381,20 @@ function setMsg(msg) {
 // ── INIT ──────────────────────────────────────────────────────────────────────
 loadState();
 renderSidebar();
+
+// Auto-reload cached PDF from IndexedDB on page load
+(async () => {
+  try {
+    const buf  = await idbGet('cm_pdfData');
+    const name = localStorage.getItem(STORAGE_PDF) || 'Cached PDF';
+    if (buf) {
+      await renderPDFFromBuffer(buf, name);
+      setMsg('Map restored from cache — ' + name);
+    }
+  } catch(e) {
+    console.warn('[CM] Could not restore PDF:', e);
+  }
+})();
 </script>
 <script>
 if ("serviceWorker" in navigator) {
