@@ -1,0 +1,1333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1a8090">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CP Scout">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CP Scout — Current Map</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root {
+    --bg:          #3a3f44;
+    --surface:     #2e3338;
+    --panel:       #4a5058;
+    --panel-light: #555c64;
+    --border:      #6a737d;
+    --teal:        #4dd9e8;
+    --teal-dim:    #2aabb8;
+    --teal-dark:   #1a8090;
+    --text:        #f0f4f5;
+    --text-dim:    #c0cdd0;
+    --text-muted:  #8a9ea3;
+    --red:         #f04040;
+    --orange:      #f08020;
+    --yellow:      #e8d020;
+    --green:       #30c860;
+    --blue:        #4da6ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Courier New', monospace; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* NAV */
+  nav { background: var(--surface); border-bottom: 2px solid var(--teal-dark); display: flex; align-items: center; padding: 0 16px; flex-shrink: 0; height: 48px; gap: 8px; }
+  .nav-brand .nav-logo { font-size: 14px; font-weight: bold; color: var(--teal); letter-spacing: 2px; text-transform: uppercase; text-shadow: 0 0 10px rgba(77,217,232,0.4); white-space: nowrap; }
+  .nav-tabs { display: flex; gap: 2px; flex: 1; margin-left: 16px; }
+  .nav-tab { padding: 0 14px; height: 48px; display: flex; align-items: center; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; color: var(--text-dim); border-bottom: 3px solid transparent; text-decoration: none; transition: all .15s; white-space: nowrap; font-family: inherit; }
+  .nav-tab:hover { color: var(--teal); background: rgba(77,217,232,0.05); }
+  .nav-tab.active { color: var(--teal); border-bottom-color: var(--teal); font-weight: bold; }
+  .nav-map-btns { display: flex; gap: 6px; margin-left: auto; }
+  .mode-btn { background: var(--panel); border: 1px solid var(--border); color: var(--text); padding: 6px 14px; font-size: 11px; letter-spacing: 1px; cursor: pointer; text-transform: uppercase; font-family: inherit; transition: all .15s; }
+  .mode-btn:hover { background: var(--teal-dark); border-color: var(--teal); color: #fff; }
+  .mode-btn.active { background: var(--teal-dim); border-color: var(--teal); color: #fff; font-weight: bold; }
+  .mode-btn.danger { border-color: #a04040; color: #f08080; }
+  .mode-btn.danger:hover { background: #6a2020; border-color: var(--red); color: #fff; }
+
+  /* LAYOUT */
+  .main { display: flex; flex: 1; overflow: hidden; }
+
+  /* SIDEBAR */
+  .sidebar { width: 270px; background: var(--surface); border-right: 2px solid var(--teal-dark); display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
+  .sidebar-section { border-bottom: 1px solid var(--border); padding: 12px; }
+  .sidebar-section h2 { font-size: 10px; letter-spacing: 2px; color: var(--teal); text-transform: uppercase; margin-bottom: 10px; font-weight: bold; }
+
+  .upload-zone { border: 2px dashed var(--border); padding: 10px; text-align: center; cursor: pointer; transition: all .15s; margin-bottom: 6px; background: var(--panel); }
+  .upload-zone:hover { border-color: var(--teal); background: rgba(77,217,232,0.1); }
+  .upload-zone.has-file { border-color: var(--teal-dim); border-style: solid; background: rgba(77,217,232,0.12); }
+  .upload-zone input { display: none; }
+  .upload-zone .uz-label { font-size: 11px; color: var(--text-dim); letter-spacing: 1px; text-transform: uppercase; }
+  .upload-zone .uz-filename { font-size: 10px; color: var(--teal); margin-top: 4px; word-break: break-all; font-weight: bold; }
+
+  .apply-btn { width: 100%; padding: 8px; background: var(--teal-dark); border: 1px solid var(--teal); color: #fff; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; font-family: inherit; font-weight: bold; transition: all .15s; margin-top: 6px; }
+  .apply-btn:hover { background: var(--teal-dim); }
+  .apply-btn.secondary { background: var(--panel); border-color: var(--border); color: var(--text-dim); }
+  .apply-btn.secondary:hover { border-color: var(--teal); color: var(--teal); background: var(--panel-light); }
+
+  .instructions { padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--panel); }
+  .instructions p { font-size: 10px; color: var(--text-dim); line-height: 1.7; }
+  .instructions strong { color: var(--teal); }
+
+  /* PIN LIST */
+  .pin-header { padding: 7px 12px; font-size: 10px; color: var(--text-dim); border-bottom: 1px solid var(--border); background: var(--panel); letter-spacing: 1px; text-transform: uppercase; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+  .pin-list { flex: 1; overflow-y: auto; padding: 6px; min-height: 60px; }
+  .pin-item { background: var(--panel); border: 1px solid var(--border); padding: 8px 10px; margin-bottom: 5px; cursor: pointer; transition: all .15s; display: flex; align-items: center; gap: 8px; }
+  .pin-item:hover { border-color: var(--teal); background: var(--panel-light); }
+  .pin-item.unplaced { border-style: dashed; opacity: 0.7; }
+  .pin-diamond { width: 13px; height: 13px; flex-shrink: 0; transform: rotate(45deg); border: 2px solid; }
+  .pin-info { flex: 1; min-width: 0; }
+  .pin-name { font-size: 10px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: bold; }
+  .pin-meta { font-size: 9px; color: var(--text-dim); margin-top: 2px; }
+  .pin-del { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; padding: 0 2px; flex-shrink: 0; line-height: 1; }
+  .pin-del:hover { color: var(--red); }
+
+  /* LEGEND */
+  .legend-float { position: absolute; bottom: 50px; left: 12px; z-index: 15; background: rgba(46,51,56,0.95); border: 1px solid var(--border); padding: 10px 12px; min-width: 220px; display: none; }
+  .legend-float h2 { font-size: 10px; letter-spacing: 2px; color: var(--teal); text-transform: uppercase; margin-bottom: 8px; font-weight: bold; }
+  .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-size: 10px; color: var(--text-dim); }
+  .legend-diamond { width: 12px; height: 12px; flex-shrink: 0; transform: rotate(45deg); border: 2px solid; }
+  .legend-circle { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; border: 2px solid; }
+  .legend-toggle { position: absolute; bottom: 12px; left: 12px; z-index: 16; background: var(--surface); border: 1px solid var(--border); color: var(--text-dim); padding: 5px 10px; font-size: 10px; cursor: pointer; font-family: inherit; letter-spacing: 1px; text-transform: uppercase; display: none; }
+  .legend-toggle:hover { border-color: var(--teal); color: var(--teal); }
+
+  /* MAP AREA */
+  .map-area { flex: 1; position: relative; overflow: auto; background: #666; }
+  #map-canvas { position: absolute; top: 0; left: 0; display: block; }
+  #overlay-canvas { position: absolute; top: 0; left: 0; pointer-events: all; display: block; cursor: crosshair; }
+
+  .drop-prompt { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; pointer-events: none; background: rgba(46,51,56,0.92); padding: 30px 40px; border: 2px dashed var(--border); }
+  .drop-prompt .dp-icon { font-size: 48px; margin-bottom: 12px; }
+  .drop-prompt p { font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: var(--text-dim); }
+
+  .pdf-controls { position: fixed; bottom: 40px; right: 16px; display: none; gap: 4px; z-index: 20; }
+  .pdf-btn { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 6px 12px; font-size: 13px; cursor: pointer; font-family: inherit; font-weight: bold; transition: all .15s; box-shadow: 0 2px 6px rgba(0,0,0,0.4); }
+  .pdf-btn:hover { border-color: var(--teal); color: var(--teal); background: var(--panel); }
+
+  /* TOOLTIP */
+  #map-tooltip { position: fixed; background: rgba(30,38,42,0.97); border: 1px solid var(--teal-dark); padding: 8px 12px; font-size: 11px; pointer-events: none; z-index: 50; display: none; max-width: 260px; }
+  #tt-name { color: var(--teal); font-weight: bold; margin-bottom: 3px; font-size: 11px; }
+  #tt-reads { color: var(--text-dim); font-size: 10px; }
+
+  /* DETAIL POPUP */
+  .detail-popup { position: fixed; background: rgba(30,38,42,0.97); border: 1px solid var(--teal-dark); padding: 0; z-index: 60; display: none; width: 320px; font-size: 11px; box-shadow: 0 4px 20px rgba(0,0,0,0.6); }
+  .dp-header { background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: flex-start; }
+  .dp-title { color: var(--teal); font-weight: bold; font-size: 12px; flex: 1; line-height: 1.4; }
+  .dp-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 18px; padding: 0; line-height: 1; flex-shrink: 0; margin-left: 8px; }
+  .dp-close:hover { color: var(--text); }
+  .dp-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+  .dp-row { display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 3px 0; border-bottom: 1px solid rgba(106,115,125,0.2); }
+  .dp-row:last-of-type { border-bottom: none; }
+  .dp-label { color: var(--text-muted); }
+  .dp-val { color: var(--text); font-weight: bold; text-align: right; }
+  .dp-reason { margin-top: 8px; padding: 10px; background: var(--panel); border-left: 3px solid var(--border); font-size: 10px; color: var(--text-dim); line-height: 1.7; }
+  .dp-reason.red    { border-left-color: var(--red); }
+  .dp-reason.orange { border-left-color: var(--orange); }
+  .dp-reason.yellow { border-left-color: var(--yellow); }
+  .dp-reason.green  { border-left-color: var(--green); }
+  .dp-reason.blue   { border-left-color: var(--blue); }
+
+  /* RECTIFIER MODAL */
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: none; align-items: center; justify-content: center; z-index: 100; }
+  .modal-bg.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--teal-dark); padding: 20px; width: 360px; max-width: 95vw; }
+  .modal h3 { color: var(--teal); font-size: 12px; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 16px; }
+  .modal-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+  .modal-field label { font-size: 9px; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; }
+  .modal-field input { background: var(--panel); border: 1px solid var(--border); color: var(--text); padding: 7px 10px; font-size: 12px; font-family: inherit; }
+  .modal-field input:focus { outline: none; border-color: var(--teal); }
+  .modal-field .opt-label { font-size: 9px; color: var(--teal-dim); margin-top: 1px; }
+  .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .modal-btns { display: flex; gap: 8px; margin-top: 16px; }
+  .modal-btn { flex: 1; padding: 8px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; font-family: inherit; font-weight: bold; border: 1px solid; }
+  .modal-btn.primary { background: var(--teal-dark); border-color: var(--teal); color: #fff; }
+  .modal-btn.primary:hover { background: var(--teal-dim); }
+  .modal-btn.cancel { background: transparent; border-color: var(--border); color: var(--text-dim); }
+  .modal-btn.cancel:hover { border-color: var(--teal); color: var(--teal); }
+  .modal-divider { font-size: 9px; letter-spacing: 2px; color: var(--text-muted); text-transform: uppercase; margin: 12px 0 8px; border-top: 1px solid var(--border); padding-top: 10px; }
+
+  /* STATUS BAR */
+  .status-bar { background: var(--surface); border-top: 1px solid var(--border); padding: 5px 14px; font-size: 10px; color: var(--text-dim); letter-spacing: 1px; flex-shrink: 0; display: flex; gap: 20px; align-items: center; }
+  .s-label { color: var(--text-muted); }
+  .s-val { color: var(--teal); font-weight: bold; }
+  #status-msg { color: var(--text); margin-left: auto; font-style: italic; }
+
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: var(--surface); }
+  ::-webkit-scrollbar-thumb { background: var(--border); }
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-brand" href="index.html" style="text-decoration:none;">
+    <div class="nav-logo">⚡ CP Scout</div>
+  </a>
+  <div class="nav-tabs">
+    <a class="nav-tab" href="overview.html">📊 Overview</a>
+    <a class="nav-tab" href="map.html">📍 Read Potential Map</a>
+    <a class="nav-tab active" href="current-map.html">⚡ Current Map</a>
+    <a class="nav-tab" href="trends.html">📈 Trends</a>
+    <a class="nav-tab" href="field-entry.html">📋 Field Entry</a>
+    <a class="nav-tab" href="tools.html">🔧 Tools</a>
+    <a class="nav-tab" href="library.html">📚 Library</a>
+  </div>
+  <div class="nav-map-btns">
+    <button class="mode-btn active" id="btn-drag"  onclick="setMode('drag')">✥ Drag</button>
+    <button class="mode-btn"        id="btn-place" onclick="setMode('place')">◇ Place</button>
+    <button class="mode-btn"        id="btn-rect"  onclick="setMode('rect')">⚡ Rectifier</button>
+    <button class="mode-btn"        id="btn-arrow" onclick="setMode('arrow')">→ Arrow</button>
+    <button class="mode-btn"        id="btn-save"  onclick="exportPDF()">⬇ Export PDF</button>
+    <button class="mode-btn danger" id="btn-clear" onclick="clearAll()">✕ Clear</button>
+  </div>
+</nav>
+
+<div class="main">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <!-- PDF Upload -->
+    <div class="sidebar-section">
+      <h2>📄 Base Map</h2>
+      <div class="upload-zone" id="upload-zone" onclick="document.getElementById('pdf-input').click()">
+        <input type="file" id="pdf-input" accept=".pdf" onchange="loadPDF(this)">
+        <div class="uz-label">Upload Station PDF</div>
+        <div class="uz-filename" id="pdf-filename">No file loaded</div>
+      </div>
+      <button class="apply-btn" onclick="loadFieldEntries()">↻ Load Field Entries</button>
+      <button class="apply-btn secondary" style="margin-top:4px" onclick="window.location.href='field-entry.html'">→ Go to Field Entry</button>
+    </div>
+
+    <!-- Instructions -->
+    <div class="instructions">
+      <p>
+        <strong>1.</strong> Upload your station PDF map.<br>
+        <strong>2.</strong> Click Load Field Entries to pull in drop checks and bond checks.<br>
+        <strong>3.</strong> Switch to <strong>Place</strong> mode and click the map to position each diamond pin.<br>
+        <strong>4.</strong> Switch to <strong>Drag</strong> mode to reposition pins.<br>
+        <strong>5.</strong> Hover a pin for quick info. Click for full detail.<br>
+        <strong>6.</strong> Use <strong>Rectifier</strong> mode to place the ⚡ marker.<br>
+        <strong>7.</strong> Use <strong>Arrow</strong> mode to drop flow arrows. Click an arrow to rotate it 90°.
+      </p>
+    </div>
+
+    <!-- Pin List -->
+    <div class="pin-header">
+      <span>CURRENT CHECKS</span>
+      <span id="pin-count" style="color:var(--teal)">0</span>
+    </div>
+    <div class="pin-list" id="pin-list"></div>
+
+  </div>
+
+  <!-- MAP AREA -->
+  <div class="map-area" id="map-area">
+    <canvas id="map-canvas"></canvas>
+    <canvas id="overlay-canvas"></canvas>
+    <div class="drop-prompt" id="drop-prompt">
+      <div class="dp-icon">⚡</div>
+      <p>Upload a station PDF to begin</p>
+    </div>
+    <div class="legend-float" id="legend-float">
+      <h2>Current Map Legend</h2>
+      <div class="legend-item"><div class="legend-diamond" style="background:rgba(240,64,64,0.15);border-color:#f04040"></div> Critical (&gt;2.0×)</div>
+      <div class="legend-item"><div class="legend-diamond" style="background:rgba(240,128,32,0.15);border-color:#f08020"></div> High Concern (1.5–2.0×)</div>
+      <div class="legend-item"><div class="legend-diamond" style="background:rgba(232,208,32,0.15);border-color:#e8d020"></div> Elevated (1.1–1.5×)</div>
+      <div class="legend-item"><div class="legend-diamond" style="background:rgba(48,200,96,0.15);border-color:#30c860"></div> Normal (0.6–1.1×)</div>
+      <div class="legend-item"><div class="legend-diamond" style="background:rgba(77,166,255,0.15);border-color:#4da6ff"></div> Low (0.3–0.6×)</div>
+      <div class="legend-item"><div class="legend-diamond" style="background:rgba(77,166,255,0.07);border-color:rgba(77,166,255,0.4)"></div> Critically Low (&lt;0.3×)</div>
+      <div class="legend-item"><div class="legend-diamond" style="background:rgba(77,217,232,0.15);border-color:var(--teal);border-style:dashed"></div> Estimate (no history)</div>
+      <div class="legend-item"><div class="legend-circle" style="background:#fff;border-color:#000"></div> Open Bond</div>
+      <div class="legend-item"><div class="legend-circle" style="background:rgba(240,192,48,0.15);border-color:#f0c030"></div> ⚡ Rectifier</div>
+      <div class="legend-item"><div style="width:24px;height:2px;background:#000;position:relative;flex-shrink:0"><div style="position:absolute;right:-1px;top:-4px;width:0;height:0;border-left:8px solid #000;border-top:5px solid transparent;border-bottom:5px solid transparent"></div></div> &nbsp;Flow Arrow (click=rotate, right-click=delete)</div>
+    </div>
+    <button class="legend-toggle" id="legend-toggle" onclick="toggleLegend()">☰ Legend</button>
+  </div>
+
+</div>
+
+<!-- TOOLTIP -->
+<div id="map-tooltip">
+  <div id="tt-name"></div>
+  <div id="tt-reads"></div>
+</div>
+
+<!-- DETAIL POPUP -->
+<div class="detail-popup" id="detail-popup">
+  <div class="dp-header">
+    <div class="dp-title" id="dp-title"></div>
+    <button class="dp-close" onclick="closeDetail()">×</button>
+  </div>
+  <div class="dp-body" id="dp-body"></div>
+</div>
+
+<!-- RECTIFIER MODAL -->
+<div class="modal-bg" id="rect-modal">
+  <div class="modal">
+    <h3>⚡ Rectifier Info</h3>
+    <div class="modal-field">
+      <label>Station Number</label>
+      <input type="text" id="rm-station" placeholder="e.g. 409">
+    </div>
+    <div class="modal-grid">
+      <div class="modal-field">
+        <label>Amp Output (A)</label>
+        <input type="number" id="rm-amps" placeholder="e.g. 7.0" step="0.01">
+      </div>
+      <div class="modal-field">
+        <label>Volt Output (V)</label>
+        <input type="number" id="rm-volts" placeholder="e.g. 3.6" step="0.01">
+      </div>
+    </div>
+    <div class="modal-divider">Optional — Spec Limits</div>
+    <div class="modal-grid">
+      <div class="modal-field">
+        <label>Min Amps</label>
+        <input type="number" id="rm-min-amps" placeholder="e.g. 5.0" step="0.01">
+        <span class="opt-label">Optional</span>
+      </div>
+      <div class="modal-field">
+        <label>Max Amps</label>
+        <input type="number" id="rm-max-amps" placeholder="e.g. 12.0" step="0.01">
+        <span class="opt-label">Optional</span>
+      </div>
+      <div class="modal-field">
+        <label>Min Volts</label>
+        <input type="number" id="rm-min-volts" placeholder="e.g. 2.0" step="0.01">
+        <span class="opt-label">Optional</span>
+      </div>
+      <div class="modal-field">
+        <label>Max Volts</label>
+        <input type="number" id="rm-max-volts" placeholder="e.g. 8.0" step="0.01">
+        <span class="opt-label">Optional</span>
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="modal-btn primary" onclick="saveRectModal()">✓ Save</button>
+      <button class="modal-btn cancel"  onclick="closeRectModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- PDF ZOOM CONTROLS -->
+<div class="pdf-controls" id="pdf-controls">
+  <button class="pdf-btn" onclick="changePage(-1)">◀</button>
+  <button class="pdf-btn" id="page-info" style="cursor:default;min-width:70px">1 / 1</button>
+  <button class="pdf-btn" onclick="changePage(1)">▶</button>
+  <button class="pdf-btn" onclick="changeZoom(-0.25)">−</button>
+  <button class="pdf-btn" id="zoom-info" style="cursor:default;min-width:55px">100%</button>
+  <button class="pdf-btn" onclick="changeZoom(0.25)">+</button>
+</div>
+
+<!-- STATUS BAR -->
+<div class="status-bar">
+  <span><span class="s-label">MODULE </span><span class="s-val">CURRENT MAP</span></span>
+  <span><span class="s-label">PINS </span><span class="s-val" id="sb-pins">0</span></span>
+  <span><span class="s-label">MODE </span><span class="s-val" id="sb-mode">DRAG</span></span>
+  <span><span class="s-label">RECTIFIER </span><span class="s-val" id="sb-rect">NOT SET</span></span>
+  <span id="status-msg"></span>
+</div>
+
+<script>
+// ── PDF.JS INIT ───────────────────────────────────────────────────────────────
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ── CONSTANTS & STATE ─────────────────────────────────────────────────────────
+const STORAGE_PINS   = 'cm_pins';
+const STORAGE_RECT   = 'cm_rectifier';
+const STORAGE_ARROWS = 'cm_arrows';
+const STORAGE_PDF    = 'cm_pdf_name';
+const KEY_FE         = 'fe_results';
+const KEY_FE_RECT    = 'fe_rectifier';
+const DIAMOND_R      = 14; // half-size of diamond in logical px
+const ARROW_LEN      = 28; // total arrow length in logical px — matches diamond scale
+
+const COLORS = {
+  red:       { fill: 'rgba(240,64,64,0.15)',    stroke: '#f04040' },
+  orange:    { fill: 'rgba(240,128,32,0.15)',   stroke: '#f08020' },
+  yellow:    { fill: 'rgba(232,208,32,0.15)',   stroke: '#e8d020' },
+  green:     { fill: 'rgba(48,200,96,0.15)',    stroke: '#30c860' },
+  blue:      { fill: 'rgba(77,166,255,0.15)',   stroke: '#4da6ff' },
+  'blue-dim':{ fill: 'rgba(77,166,255,0.07)',   stroke: 'rgba(77,166,255,0.4)' },
+  open:      { fill: '#ffffff',                 stroke: '#000000' },
+  none:      { fill: 'rgba(140,140,140,0.15)',  stroke: '#888888' },
+};
+
+const COLOR_LABELS = {
+  red: '⚠ CRITICAL', orange: '⚠ HIGH CONCERN', yellow: '△ ELEVATED',
+  green: '✓ NORMAL', blue: '↓ LOW', 'blue-dim': '↓↓ CRITICALLY LOW',
+  open: '○ OPEN BOND', none: '— UNSCORED'
+};
+
+let pdfDoc    = null;
+let pdfPage   = null;
+let pageNum   = 1;
+let scale     = 1.0;
+let zoom      = 1.0;
+let pins      = [];
+let arrows    = []; // { id, x, y, dir } dir: 0=right 1=down 2=left 3=up
+let rectifier = null;
+let mode      = 'drag';
+let isDragging    = false;
+let dragPin       = null;
+let dragOffX = 0, dragOffY = 0;
+let wasJustDragging = false;
+let pendingPlacement = null; // fe_result entry waiting to be placed
+
+const mapCanvas     = document.getElementById('map-canvas');
+const overlayCanvas = document.getElementById('overlay-canvas');
+const mapCtx        = mapCanvas.getContext('2d');
+const overlayCtx    = overlayCanvas.getContext('2d');
+const tooltip       = document.getElementById('map-tooltip');
+
+// ── LOAD SAVED STATE ──────────────────────────────────────────────────────────
+function loadState() {
+  try { pins      = JSON.parse(localStorage.getItem(STORAGE_PINS)   || '[]'); } catch(e) { pins = []; }
+  try { rectifier = JSON.parse(localStorage.getItem(STORAGE_RECT)   || 'null'); } catch(e) { rectifier = null; }
+  try { arrows    = JSON.parse(localStorage.getItem(STORAGE_ARROWS) || '[]'); } catch(e) { arrows = []; }
+  updateRectStatus();
+}
+
+function savePins()      { try { localStorage.setItem(STORAGE_PINS,   JSON.stringify(pins));      } catch(e) {} }
+function saveRectifier() { try { localStorage.setItem(STORAGE_RECT,   JSON.stringify(rectifier)); } catch(e) {} }
+function saveArrows()    { try { localStorage.setItem(STORAGE_ARROWS, JSON.stringify(arrows));    } catch(e) {} }
+
+// ── LOAD FIELD ENTRIES FROM fe_results ───────────────────────────────────────
+function loadFieldEntries() {
+  let entries = [];
+  try { entries = JSON.parse(localStorage.getItem(KEY_FE) || '[]'); } catch(e) {}
+  if (!entries.length) { setMsg('No field entries found. Go to Field Entry and add drop checks or bond checks first.'); return; }
+
+  // Load rectifier from field entry if we don't have one set
+  if (!rectifier) {
+    try {
+      const feRect = JSON.parse(localStorage.getItem(KEY_FE_RECT) || 'null');
+      if (feRect && feRect.amps) {
+        rectifier = { x: 50, y: 50, station: feRect.station || '—', amps: feRect.amps, volts: feRect.volts || null, minAmps: null, maxAmps: null, minVolts: null, maxVolts: null };
+        saveRectifier();
+        updateRectStatus();
+      }
+    } catch(e) {}
+  }
+
+  let added = 0, skipped = 0;
+  for (const entry of entries) {
+    // Check if already loaded (by id)
+    if (pins.find(p => p.feId === entry.id)) { skipped++; continue; }
+    const pin = {
+      id:        Date.now() + Math.random(),
+      feId:      entry.id,
+      type:      entry.type,        // 'drop' or 'bond'
+      address:   entry.address,
+      amps:      entry.amps,
+      ratio:     parseFloat(entry.ratio) || null,
+      color:     entry.color || 'none',
+      label:     entry.label || '—',
+      formula:   entry.formula || null,
+      expected:  entry.expected || '—',
+      histDelta: entry.histDelta || '—',
+      pipeLabel: entry.pipeLabel || '—',
+      proximity: entry.proximity || '—',
+      notes:     entry.notes || '',
+      date:      entry.date || '',
+      isEstimate:!entry.formula || entry.expected?.includes('est.'),
+      isOpen:    entry.amps === 0,
+      placed:    false,
+      x: 0, y: 0
+    };
+    // Open bond override
+    if (pin.isOpen) { pin.color = 'open'; pin.label = 'OPEN BOND'; }
+    pins.push(pin);
+    added++;
+  }
+
+  savePins();
+  renderSidebar();
+  drawOverlay();
+  setMsg(`Loaded ${added} new entr${added !== 1 ? 'ies' : 'y'} from Field Entry.${skipped ? ' ' + skipped + ' already on map.' : ''} Switch to Place mode to position pins.`);
+  if (pdfPage && added > 0) setMode('place');
+}
+
+// ── PDF LOADING ───────────────────────────────────────────────────────────────
+async function loadPDF(input) {
+  const file = input.files[0];
+  if (!file) return;
+  document.getElementById('pdf-filename').textContent = file.name;
+  document.getElementById('upload-zone').classList.add('has-file');
+  localStorage.setItem(STORAGE_PDF, file.name);
+
+  const arrayBuf = await file.arrayBuffer();
+  pdfDoc = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
+  pageNum = 1;
+  await renderPage();
+  document.getElementById('drop-prompt').style.display = 'none';
+  document.getElementById('pdf-controls').style.display = 'flex';
+  document.getElementById('legend-toggle').style.display = 'block';
+  document.getElementById('legend-float').style.display = 'block';
+  drawOverlay();
+  setMsg('Map loaded — ' + file.name);
+}
+
+async function renderPage() {
+  pdfPage = await pdfDoc.getPage(pageNum);
+  const vp = pdfPage.getViewport({ scale: zoom * 1.5 });
+  const quality = 2;
+
+  mapCanvas.width     = vp.width  * quality;
+  mapCanvas.height    = vp.height * quality;
+  mapCanvas.style.width  = vp.width  + 'px';
+  mapCanvas.style.height = vp.height + 'px';
+  overlayCanvas.width    = vp.width  * quality;
+  overlayCanvas.height   = vp.height * quality;
+  overlayCanvas.style.width  = vp.width  + 'px';
+  overlayCanvas.style.height = vp.height + 'px';
+
+  scale = zoom * 1.5;
+
+  await pdfPage.render({ canvasContext: mapCtx, viewport: pdfPage.getViewport({ scale: scale * quality }) }).promise;
+  // Correct: re-render at physical resolution
+  mapCtx.setTransform(1,0,0,1,0,0);
+  await pdfPage.render({ canvasContext: mapCtx, viewport: pdfPage.getViewport({ scale: scale * quality }) }).promise;
+
+  document.getElementById('page-info').textContent = pageNum + ' / ' + pdfDoc.numPages;
+  document.getElementById('zoom-info').textContent  = Math.round(zoom * 100) + '%';
+  drawOverlay();
+}
+
+async function changePage(delta) {
+  if (!pdfDoc) return;
+  const next = pageNum + delta;
+  if (next < 1 || next > pdfDoc.numPages) return;
+  pageNum = next;
+  await renderPage();
+}
+
+async function changeZoom(delta) {
+  zoom = Math.max(0.5, Math.min(3, zoom + delta));
+  if (pdfPage) await renderPage();
+}
+
+// ── MODE ──────────────────────────────────────────────────────────────────────
+function setMode(m) {
+  mode = m;
+  ['drag','place','rect','arrow'].forEach(id => {
+    document.getElementById('btn-' + id).classList.toggle('active', id === m);
+  });
+  overlayCanvas.style.cursor = m === 'drag' ? 'grab' : 'crosshair';
+  document.getElementById('sb-mode').textContent = m.toUpperCase();
+}
+
+// ── DRAW OVERLAY ──────────────────────────────────────────────────────────────
+function drawOverlay() {
+  const quality = 2;
+  overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  overlayCtx.setTransform(quality, 0, 0, quality, 0, 0);
+
+  const placedPins = pins.filter(p => p.placed);
+
+  for (const pin of placedPins) {
+    drawDiamond(pin);
+  }
+
+  // Draw flow arrows
+  for (const arrow of arrows) {
+    drawArrow(arrow);
+  }
+
+  // Draw rectifier
+  if (rectifier && rectifier.x && rectifier.y) drawRectifier();
+
+  document.getElementById('sb-pins').textContent   = placedPins.length;
+  document.getElementById('pin-count').textContent = pins.length;
+}
+
+// ── DRAW ARROW ────────────────────────────────────────────────────────────────
+// dir: 0=right  1=down  2=left  3=up
+function drawArrow(arrow) {
+  const sx   = arrow.x * scale;
+  const sy   = arrow.y * scale;
+  const len  = ARROW_LEN * scale;
+  const head = len * 0.38;  // arrowhead length as fraction of total
+  const hw   = len * 0.22;  // arrowhead half-width
+  const sw   = Math.max(1.5, 2.2 * scale); // shaft width
+
+  overlayCtx.save();
+  overlayCtx.translate(sx, sy);
+  overlayCtx.rotate(arrow.dir * Math.PI / 2); // 0=right, 1=down, 2=left, 3=up
+
+  // Draw pointing RIGHT then rotate
+  const x1 = -len / 2; // shaft start
+  const x2 =  len / 2 - head; // shaft end / head base
+  const x3 =  len / 2; // arrowhead tip
+
+  overlayCtx.strokeStyle = '#000000';
+  overlayCtx.fillStyle   = '#000000';
+  overlayCtx.lineWidth   = sw;
+  overlayCtx.lineCap     = 'round';
+  overlayCtx.shadowColor = 'rgba(255,255,255,0.6)';
+  overlayCtx.shadowBlur  = 2;
+
+  // Shaft
+  overlayCtx.beginPath();
+  overlayCtx.moveTo(x1, 0);
+  overlayCtx.lineTo(x2, 0);
+  overlayCtx.stroke();
+
+  // Arrowhead (filled triangle)
+  overlayCtx.beginPath();
+  overlayCtx.moveTo(x3,      0);   // tip
+  overlayCtx.lineTo(x2,  hw);      // bottom-left of head
+  overlayCtx.lineTo(x2, -hw);      // top-left of head
+  overlayCtx.closePath();
+  overlayCtx.shadowBlur = 0;
+  overlayCtx.fill();
+
+  overlayCtx.restore();
+}
+
+// ── DRAW DIAMOND ──────────────────────────────────────────────────────────────
+function drawDiamond(pin) {
+  const sx = pin.x * scale;
+  const sy = pin.y * scale;
+  const r  = DIAMOND_R * scale;
+  const c  = COLORS[pin.color] || COLORS.none;
+  const isEstimate = pin.isEstimate && pin.color !== 'open';
+  const isOpen     = pin.color === 'open';
+
+  if (isOpen) {
+    // Open bond: hollow circle, black border, white fill
+    overlayCtx.beginPath();
+    overlayCtx.arc(sx, sy, r * 0.75, 0, Math.PI * 2);
+    overlayCtx.fillStyle   = '#ffffff';
+    overlayCtx.fill();
+    overlayCtx.strokeStyle = '#000000';
+    overlayCtx.lineWidth   = Math.max(2, 2 * scale);
+    overlayCtx.stroke();
+  } else {
+    // Diamond shape
+    overlayCtx.beginPath();
+    overlayCtx.moveTo(sx,     sy - r);  // top
+    overlayCtx.lineTo(sx + r, sy);      // right
+    overlayCtx.lineTo(sx,     sy + r);  // bottom
+    overlayCtx.lineTo(sx - r, sy);      // left
+    overlayCtx.closePath();
+    overlayCtx.fillStyle = c.fill;
+    overlayCtx.fill();
+
+    if (isEstimate) {
+      // Dashed border for estimates
+      overlayCtx.setLineDash([4 * scale, 3 * scale]);
+    } else {
+      overlayCtx.setLineDash([]);
+    }
+    overlayCtx.strokeStyle = c.stroke;
+    overlayCtx.lineWidth   = Math.max(1.5, 2 * scale);
+    overlayCtx.stroke();
+    overlayCtx.setLineDash([]);
+
+    // Center dot
+    overlayCtx.beginPath();
+    overlayCtx.arc(sx, sy, Math.max(2, 3 * scale), 0, Math.PI * 2);
+    overlayCtx.fillStyle = c.stroke;
+    overlayCtx.fill();
+  }
+
+  // Amp label below pin
+  const fs = Math.max(7, Math.min(10, 8 * scale));
+  overlayCtx.font          = `bold ${fs}px Courier New`;
+  overlayCtx.textAlign     = 'center';
+  overlayCtx.textBaseline  = 'top';
+  overlayCtx.fillStyle     = isOpen ? '#000000' : c.stroke;
+  overlayCtx.shadowColor   = 'rgba(0,0,0,0.9)';
+  overlayCtx.shadowBlur    = 3;
+  overlayCtx.fillText(pin.amps.toFixed(2) + 'A', sx, sy + r + 2);
+  overlayCtx.shadowBlur    = 0;
+  overlayCtx.textBaseline  = 'middle';
+}
+
+// ── DRAW RECTIFIER ────────────────────────────────────────────────────────────
+function drawRectifier() {
+  const rx = rectifier.x * scale;
+  const ry = rectifier.y * scale;
+  const rs = Math.max(14, 16 * scale);
+
+  // Check spec violations
+  const ampViolation  = (rectifier.minAmps  && rectifier.amps  < rectifier.minAmps)  ||
+                        (rectifier.maxAmps  && rectifier.amps  > rectifier.maxAmps);
+  const voltViolation = (rectifier.minVolts && rectifier.volts < rectifier.minVolts) ||
+                        (rectifier.maxVolts && rectifier.volts > rectifier.maxVolts);
+  const hasViolation  = ampViolation || voltViolation;
+
+  // Outer pulsing ring
+  overlayCtx.beginPath();
+  overlayCtx.arc(rx, ry, rs * 1.6, 0, Math.PI * 2);
+  overlayCtx.strokeStyle = 'rgba(240,192,48,0.4)';
+  overlayCtx.lineWidth   = Math.max(1, 2 * scale);
+  overlayCtx.stroke();
+
+  // Inner circle
+  overlayCtx.beginPath();
+  overlayCtx.arc(rx, ry, rs, 0, Math.PI * 2);
+  overlayCtx.fillStyle   = 'rgba(240,192,48,0.15)';
+  overlayCtx.fill();
+  overlayCtx.strokeStyle = '#f0c030';
+  overlayCtx.lineWidth   = Math.max(1.5, 2 * scale);
+  overlayCtx.stroke();
+
+  // Lightning bolt
+  const rfs = Math.max(10, Math.min(16, 13 * scale));
+  overlayCtx.font         = `bold ${rfs}px Courier New`;
+  overlayCtx.textAlign    = 'center';
+  overlayCtx.textBaseline = 'middle';
+  overlayCtx.fillStyle    = '#f0c030';
+  overlayCtx.shadowColor  = 'rgba(0,0,0,0.9)';
+  overlayCtx.shadowBlur   = 4;
+  overlayCtx.fillText('⚡', rx, ry);
+  overlayCtx.shadowBlur   = 0;
+
+  // RECT label below
+  const lfs = Math.max(7, Math.min(10, 8 * scale));
+  overlayCtx.font         = `bold ${lfs}px Courier New`;
+  overlayCtx.fillStyle    = '#f0c030';
+  overlayCtx.shadowColor  = 'rgba(0,0,0,0.9)';
+  overlayCtx.shadowBlur   = 3;
+  overlayCtx.fillText('RECT', rx, ry + rs + lfs + 2);
+  overlayCtx.shadowBlur   = 0;
+
+  // Warning badge if spec violated
+  if (hasViolation) {
+    overlayCtx.beginPath();
+    overlayCtx.arc(rx + rs * 0.85, ry - rs * 0.85, Math.max(5, 6 * scale), 0, Math.PI * 2);
+    overlayCtx.fillStyle = '#f04040';
+    overlayCtx.fill();
+    overlayCtx.font      = `bold ${Math.max(7, 8 * scale)}px Courier New`;
+    overlayCtx.fillStyle = '#fff';
+    overlayCtx.fillText('!', rx + rs * 0.85, ry - rs * 0.85);
+  }
+}
+
+// ── HIT TESTS ─────────────────────────────────────────────────────────────────
+function pinAtXY(cx, cy) {
+  // Diamond hit test: check if point is within rotated square bounds
+  for (const pin of [...pins].reverse()) {
+    if (!pin.placed) continue;
+    const sx = pin.x * scale;
+    const sy = pin.y * scale;
+    const r  = DIAMOND_R * scale + 6;
+    if (pin.color === 'open') {
+      // Circle hit test for open bonds
+      const dx = sx - cx, dy = sy - cy;
+      if (Math.sqrt(dx*dx + dy*dy) <= r) return pin;
+    } else {
+      // Diamond hit test (rotated square)
+      const dx = Math.abs(cx - sx);
+      const dy = Math.abs(cy - sy);
+      if (dx + dy <= r) return pin;
+    }
+  }
+  return null;
+}
+
+function rectAtXY(cx, cy) {
+  if (!rectifier || !rectifier.x) return false;
+  const dx = rectifier.x * scale - cx;
+  const dy = rectifier.y * scale - cy;
+  const r  = Math.max(14, 16 * scale) * 1.6 + 8;
+  return Math.sqrt(dx*dx + dy*dy) <= r;
+}
+
+function arrowAtXY(cx, cy) {
+  const hitR = ARROW_LEN * scale * 0.6; // generous hit radius
+  for (const arr of [...arrows].reverse()) {
+    const dx = arr.x * scale - cx;
+    const dy = arr.y * scale - cy;
+    if (Math.sqrt(dx*dx + dy*dy) <= hitR) return arr;
+  }
+  return null;
+}
+
+// ── PLACE PIN ─────────────────────────────────────────────────────────────────
+function placeNextUnplaced(x, y) {
+  // Find first unplaced pin
+  const unplaced = pins.filter(p => !p.placed);
+  if (!unplaced.length) { setMsg('All pins are placed. Load more field entries or switch to Drag mode.'); return; }
+
+  // If a specific pin is pending (from sidebar click), place that one
+  let target = pendingPlacement ? pins.find(p => p.feId === pendingPlacement) : unplaced[0];
+  if (!target) target = unplaced[0];
+
+  target.placed = true;
+  target.x = x;
+  target.y = y;
+  pendingPlacement = null;
+
+  savePins();
+  renderSidebar();
+  drawOverlay();
+
+  const remaining = pins.filter(p => !p.placed).length;
+  setMsg(`Placed: ${target.address} (${target.amps.toFixed(3)}A). ${remaining} remaining.`);
+}
+
+// ── SIDEBAR ───────────────────────────────────────────────────────────────────
+function renderSidebar() {
+  const list = document.getElementById('pin-list');
+  if (!pins.length) {
+    list.innerHTML = '<div style="padding:12px;font-size:10px;color:var(--text-muted);text-align:center">No entries loaded.<br>Click Load Field Entries.</div>';
+    document.getElementById('pin-count').textContent = 0;
+    document.getElementById('sb-pins').textContent   = 0;
+    return;
+  }
+
+  document.getElementById('pin-count').textContent = pins.length;
+
+  list.innerHTML = pins.map(pin => {
+    const c = COLORS[pin.color] || COLORS.none;
+    const typeLabel = pin.type === 'bond' ? '🔗' : '🔌';
+    const statusClass = pin.placed ? '' : ' unplaced';
+    const placedLabel = pin.placed ? '' : '<span style="color:var(--orange);font-size:9px"> ◇ UNPLACED</span>';
+
+    return `<div class="pin-item${statusClass}" onclick="focusPin('${pin.feId}')">
+      <div class="pin-diamond" style="background:${c.fill};border-color:${c.stroke};${pin.isEstimate && pin.color !== 'open' ? 'border-style:dashed' : ''}"></div>
+      <div class="pin-info">
+        <div class="pin-name">${typeLabel} ${pin.address}</div>
+        <div class="pin-meta">${pin.amps.toFixed(3)}A — <span style="color:${c.stroke}">${pin.label}</span>${placedLabel}</div>
+      </div>
+      <button class="pin-del" onclick="deletePin('${pin.feId}',event)" title="Remove">×</button>
+    </div>`;
+  }).join('');
+}
+
+function focusPin(feId) {
+  const pin = pins.find(p => p.feId == feId);
+  if (!pin) return;
+  if (!pin.placed) {
+    // Mark as next to be placed
+    pendingPlacement = feId;
+    setMode('place');
+    setMsg('Click on the map to place: ' + pin.address);
+    return;
+  }
+  flashPin(pin);
+  showDetail(pin, null);
+}
+
+function deletePin(feId, e) {
+  e.stopPropagation();
+  pins = pins.filter(p => p.feId != feId);
+  savePins(); drawOverlay(); renderSidebar();
+}
+
+function flashPin(pin) {
+  if (!pin.placed) return;
+  const sx = pin.x * scale, sy = pin.y * scale;
+  let n = 0;
+  const iv = setInterval(() => {
+    drawOverlay();
+    overlayCtx.save();
+    overlayCtx.setTransform(2, 0, 0, 2, 0, 0);
+    overlayCtx.beginPath();
+    overlayCtx.arc(sx, sy, (DIAMOND_R + 14) * scale, 0, Math.PI * 2);
+    overlayCtx.strokeStyle = '#fff';
+    overlayCtx.lineWidth   = 2.5;
+    overlayCtx.stroke();
+    overlayCtx.restore();
+    if (++n >= 6) clearInterval(iv);
+  }, 130);
+}
+
+// ── DETAIL POPUP ──────────────────────────────────────────────────────────────
+function showDetail(pin, e) {
+  tooltip.style.display = 'none';
+  const popup = document.getElementById('detail-popup');
+  const c = COLORS[pin.color] || COLORS.none;
+  const colorLabel = COLOR_LABELS[pin.color] || '—';
+
+  let bodyHTML = `
+    <div class="dp-row"><span class="dp-label">Type</span><span class="dp-val">${pin.type === 'bond' ? '🔗 Bond Check' : '🔌 Drop Check'}</span></div>
+    <div class="dp-row"><span class="dp-label">Status</span><span class="dp-val" style="color:${c.stroke}">${colorLabel}</span></div>
+    <div class="dp-row"><span class="dp-label">Amps</span><span class="dp-val">${pin.amps.toFixed(3)} A</span></div>`;
+
+  if (pin.ratio) {
+    bodyHTML += `<div class="dp-row"><span class="dp-label">Ratio</span><span class="dp-val" style="color:${c.stroke}">${pin.ratio}×</span></div>`;
+  }
+  if (pin.expected && pin.expected !== '—') {
+    bodyHTML += `<div class="dp-row"><span class="dp-label">Expected</span><span class="dp-val">${pin.expected}</span></div>`;
+  }
+  if (pin.formula) {
+    bodyHTML += `<div class="dp-row"><span class="dp-label">Formula</span><span class="dp-val" style="font-size:9px">${pin.formula}</span></div>`;
+  }
+  if (pin.pipeLabel && pin.pipeLabel !== '—') {
+    bodyHTML += `<div class="dp-row"><span class="dp-label">Pipe</span><span class="dp-val">${pin.pipeLabel}</span></div>`;
+  }
+  if (pin.histDelta && pin.histDelta !== '—') {
+    bodyHTML += `<div class="dp-row"><span class="dp-label">Hist. Δ</span><span class="dp-val">${pin.histDelta}</span></div>`;
+  }
+  if (pin.date) {
+    bodyHTML += `<div class="dp-row"><span class="dp-label">Date</span><span class="dp-val">${pin.date}</span></div>`;
+  }
+
+  bodyHTML += `<div class="dp-reason ${pin.color}">${colorReason(pin)}</div>`;
+
+  if (pin.notes) {
+    bodyHTML += `<div style="font-size:9px;color:var(--text-muted);margin-top:6px;font-style:italic">Notes: ${pin.notes}</div>`;
+  }
+  if (pin.isEstimate && pin.color !== 'open') {
+    bodyHTML += `<div style="font-size:9px;color:var(--yellow);margin-top:6px">◇ Estimate — no historical data available for this location. Scoring based on station cross-comparison.</div>`;
+  }
+
+  document.getElementById('dp-title').textContent = pin.address;
+  document.getElementById('dp-body').innerHTML = bodyHTML;
+
+  const pw = 320, margin = 10, navH = 80;
+  popup.style.width = pw + 'px';
+  popup.style.left  = '-9999px';
+  popup.style.top   = '0px';
+  popup.style.maxHeight = '';
+  popup.style.overflowY = '';
+  popup.style.display   = 'block';
+
+  const ph     = popup.offsetHeight;
+  const clickX = e ? e.clientX : window.innerWidth  / 2;
+  const clickY = e ? e.clientY : window.innerHeight / 2;
+  let left = clickX + 16;
+  if (left + pw > window.innerWidth - margin) left = clickX - pw - 16;
+  left = Math.max(margin, left);
+  const roomBelow = window.innerHeight - clickY - margin;
+  const roomAbove = clickY - navH - margin;
+  let top;
+  if (ph <= roomBelow)       top = clickY - 20;
+  else if (ph <= roomAbove)  top = clickY - ph + 20;
+  else {
+    popup.style.maxHeight = (window.innerHeight - navH - margin * 2) + 'px';
+    popup.style.overflowY = 'auto';
+    top = navH + margin;
+  }
+  top = Math.max(navH + margin, top);
+  popup.style.left = left + 'px';
+  popup.style.top  = top  + 'px';
+  if (pin.placed) flashPin(pin);
+}
+
+function showRectDetail(e) {
+  tooltip.style.display = 'none';
+  const popup = document.getElementById('detail-popup');
+  if (!rectifier) return;
+
+  const ampViolation  = (rectifier.minAmps  && rectifier.amps  < rectifier.minAmps)  ? '⚠ Below minimum' :
+                        (rectifier.maxAmps  && rectifier.amps  > rectifier.maxAmps)  ? '⚠ Above maximum' : '✓ Within spec';
+  const voltViolation = (rectifier.minVolts && rectifier.volts < rectifier.minVolts) ? '⚠ Below minimum' :
+                        (rectifier.maxVolts && rectifier.volts > rectifier.maxVolts) ? '⚠ Above maximum' : '✓ Within spec';
+  const ampColor  = ampViolation.startsWith('⚠') ? 'var(--red)' : 'var(--green)';
+  const voltColor = voltViolation.startsWith('⚠') ? 'var(--red)' : 'var(--green)';
+
+  document.getElementById('dp-title').textContent = '⚡ Rectifier — Station ' + (rectifier.station || '—');
+  document.getElementById('dp-body').innerHTML = `
+    <div class="dp-row"><span class="dp-label">Station</span><span class="dp-val">${rectifier.station || '—'}</span></div>
+    <div class="dp-row"><span class="dp-label">Amp Output</span><span class="dp-val">${rectifier.amps != null ? rectifier.amps + ' A' : '—'}</span></div>
+    ${rectifier.minAmps || rectifier.maxAmps ? `<div class="dp-row"><span class="dp-label">Amp Spec</span><span class="dp-val" style="color:${ampColor}">${ampViolation} (${rectifier.minAmps||'—'}–${rectifier.maxAmps||'—'} A)</span></div>` : ''}
+    <div class="dp-row"><span class="dp-label">Volt Output</span><span class="dp-val">${rectifier.volts != null ? rectifier.volts + ' V' : '—'}</span></div>
+    ${rectifier.minVolts || rectifier.maxVolts ? `<div class="dp-row"><span class="dp-label">Volt Spec</span><span class="dp-val" style="color:${voltColor}">${voltViolation} (${rectifier.minVolts||'—'}–${rectifier.maxVolts||'—'} V)</span></div>` : ''}
+    <div class="dp-reason green" style="margin-top:8px;font-size:10px">Click the rectifier pin to edit output values and spec limits at any time.</div>`;
+
+  const pw = 320, margin = 10, navH = 80;
+  popup.style.width   = pw + 'px';
+  popup.style.left    = '-9999px';
+  popup.style.top     = '0px';
+  popup.style.display = 'block';
+  const ph = popup.offsetHeight;
+  const clickX = e ? e.clientX : window.innerWidth / 2;
+  const clickY = e ? e.clientY : window.innerHeight / 2;
+  let left = clickX + 16;
+  if (left + pw > window.innerWidth - margin) left = clickX - pw - 16;
+  left = Math.max(margin, left);
+  let top = clickY - 20;
+  top = Math.max(navH + margin, Math.min(top, window.innerHeight - ph - margin));
+  popup.style.left = left + 'px';
+  popup.style.top  = top  + 'px';
+}
+
+function closeDetail() { document.getElementById('detail-popup').style.display = 'none'; }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDetail(); closeRectModal(); } });
+
+// ── COLOR REASON TEXT ─────────────────────────────────────────────────────────
+function colorReason(pin) {
+  if (pin.color === 'open')
+    return '<b style="color:#888">○ OPEN BOND:</b> This bond is intentionally open. Zero current is expected and confirmed. No fault indicated.';
+
+  if (pin.color === 'none')
+    return 'No scoring data available for this entry.';
+
+  const typeStr = pin.type === 'bond' ? 'bond check' : 'drop check';
+  const ratioVal = parseFloat(pin.ratio) || 0;
+  const ampsStr  = pin.amps.toFixed(3) + 'A';
+  const ratioStr = ratioVal.toFixed(2) + '×';
+
+  const reasons = {
+    red:       `<b style="color:var(--red)">⚠ CRITICAL:</b> ${typeStr} reading of ${ampsStr} is ${ratioStr} of expected — more than 2× the baseline. This is a strong indicator of a short circuit, major coating failure, or foreign structure interference. Immediate investigation required.`,
+    orange:    `<b style="color:var(--orange)">⚠ HIGH CONCERN:</b> ${typeStr} reading of ${ampsStr} is ${ratioStr} of expected (1.5–2.0×). Significantly elevated current — suspect coating degradation, bond configuration issue, or developing short. Schedule investigation.`,
+    yellow:    `<b style="color:var(--yellow)">△ ELEVATED:</b> ${typeStr} reading of ${ampsStr} is ${ratioStr} of expected (1.1–1.5×). Above normal range. Document and monitor closely — investigate if trend continues over subsequent surveys.`,
+    green:     `<b style="color:var(--green)">✓ NORMAL:</b> ${typeStr} reading of ${ampsStr} is ${ratioStr} of expected (0.6–1.1×). Current distribution within expected range for this location. No action required.`,
+    blue:      `<b style="color:var(--blue)">↓ LOW:</b> ${typeStr} reading of ${ampsStr} is ${ratioStr} of expected (0.3–0.6×). Below expected — current may not be adequately reaching this segment. Check bond continuity and connections.`,
+    'blue-dim':`<b style="color:rgba(77,166,255,0.7)">↓↓ CRITICALLY LOW:</b> ${typeStr} reading of ${ampsStr} is ${ratioStr} of expected (below 0.3×). Very little current detected. Possible open bond, broken connection, or complete segment isolation. Investigate immediately.`,
+  };
+
+  let text = reasons[pin.color] || 'No scoring data available.';
+
+  if (pin.isEstimate)
+    text += `<br><br><b style="color:var(--text-muted)">— ESTIMATE:</b> No historical data available for this location. Expected value based on station cross-comparison. Accuracy improves with subsequent survey data.`;
+
+  if (pin.histDelta && pin.histDelta !== '—')
+    text += `<br><br><b style="color:var(--text-dim)">→ HISTORICAL Δ:</b> Current changed ${pin.histDelta} vs last recorded survey at this location.`;
+
+  return text;
+}
+
+// ── RECTIFIER MODAL ───────────────────────────────────────────────────────────
+function openRectModal() {
+  if (rectifier) {
+    document.getElementById('rm-station').value   = rectifier.station  || '';
+    document.getElementById('rm-amps').value      = rectifier.amps     || '';
+    document.getElementById('rm-volts').value     = rectifier.volts    || '';
+    document.getElementById('rm-min-amps').value  = rectifier.minAmps  || '';
+    document.getElementById('rm-max-amps').value  = rectifier.maxAmps  || '';
+    document.getElementById('rm-min-volts').value = rectifier.minVolts || '';
+    document.getElementById('rm-max-volts').value = rectifier.maxVolts || '';
+  }
+  document.getElementById('rect-modal').classList.add('open');
+  setTimeout(() => document.getElementById('rm-station').focus(), 60);
+}
+
+function saveRectModal() {
+  const station  = document.getElementById('rm-station').value.trim();
+  const amps     = parseFloat(document.getElementById('rm-amps').value)     || null;
+  const volts    = parseFloat(document.getElementById('rm-volts').value)    || null;
+  const minAmps  = parseFloat(document.getElementById('rm-min-amps').value) || null;
+  const maxAmps  = parseFloat(document.getElementById('rm-max-amps').value) || null;
+  const minVolts = parseFloat(document.getElementById('rm-min-volts').value)|| null;
+  const maxVolts = parseFloat(document.getElementById('rm-max-volts').value)|| null;
+
+  if (!rectifier) rectifier = { x: 50, y: 50 };
+  rectifier = { ...rectifier, station, amps, volts, minAmps, maxAmps, minVolts, maxVolts };
+  saveRectifier();
+  updateRectStatus();
+  drawOverlay();
+  closeRectModal();
+  setMsg('Rectifier updated — Station ' + (station || '—') + ', ' + (amps || '—') + 'A / ' + (volts || '—') + 'V');
+}
+
+function closeRectModal() { document.getElementById('rect-modal').classList.remove('open'); }
+
+function updateRectStatus() {
+  const el = document.getElementById('sb-rect');
+  if (!rectifier || !rectifier.amps) { el.textContent = 'NOT SET'; return; }
+  el.textContent = (rectifier.station ? 'STN ' + rectifier.station + ' — ' : '') + rectifier.amps + 'A / ' + (rectifier.volts || '—') + 'V';
+}
+
+// ── MOUSE EVENTS ──────────────────────────────────────────────────────────────
+overlayCanvas.addEventListener('mousedown', e => {
+  if (mode !== 'drag') return;
+  const rect = overlayCanvas.getBoundingClientRect();
+  const cx = e.clientX - rect.left;
+  const cy = e.clientY - rect.top;
+  const pin = pinAtXY(cx, cy);
+  if (pin) {
+    dragPin = pin; isDragging = true;
+    dragOffX = cx - pin.x * scale; dragOffY = cy - pin.y * scale;
+    overlayCanvas.style.cursor = 'grabbing'; e.preventDefault(); return;
+  }
+  // Arrow drag
+  const arrow = arrowAtXY(cx, cy);
+  if (arrow) {
+    dragPin = null; isDragging = true;
+    dragOffX = cx - arrow.x * scale; dragOffY = cy - arrow.y * scale;
+    overlayCanvas.dataset.draggingArrow = arrow.id;
+    overlayCanvas.style.cursor = 'grabbing'; e.preventDefault(); return;
+  }
+  if (rectAtXY(cx, cy)) {
+    dragPin = null; isDragging = true;
+    dragOffX = cx - rectifier.x * scale; dragOffY = cy - rectifier.y * scale;
+    overlayCanvas.dataset.draggingRect = '1';
+    overlayCanvas.style.cursor = 'grabbing'; e.preventDefault();
+  }
+});
+
+document.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  const rect = overlayCanvas.getBoundingClientRect();
+  const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+  tooltip.style.display = 'none';
+  if (overlayCanvas.dataset.draggingRect === '1' && rectifier) {
+    rectifier.x = (cx - dragOffX) / scale;
+    rectifier.y = (cy - dragOffY) / scale;
+  } else if (overlayCanvas.dataset.draggingArrow) {
+    const arr = arrows.find(a => a.id == overlayCanvas.dataset.draggingArrow);
+    if (arr) { arr.x = (cx - dragOffX) / scale; arr.y = (cy - dragOffY) / scale; }
+  } else if (dragPin) {
+    dragPin.x = (cx - dragOffX) / scale;
+    dragPin.y = (cy - dragOffY) / scale;
+  }
+  drawOverlay();
+});
+
+document.addEventListener('mouseup', e => {
+  if (!isDragging) return;
+  wasJustDragging = true;
+  setTimeout(() => { wasJustDragging = false; }, 50);
+  if (overlayCanvas.dataset.draggingRect === '1') {
+    saveRectifier(); drawOverlay(); updateRectStatus();
+    setMsg('Rectifier repositioned.');
+    delete overlayCanvas.dataset.draggingRect;
+  } else if (overlayCanvas.dataset.draggingArrow) {
+    saveArrows(); drawOverlay();
+    setMsg('Arrow repositioned.');
+    delete overlayCanvas.dataset.draggingArrow;
+  } else if (dragPin) {
+    savePins(); renderSidebar();
+    setMsg('Pin repositioned: ' + dragPin.address);
+  }
+  dragPin = null; isDragging = false;
+  overlayCanvas.style.cursor = mode === 'drag' ? 'grab' : 'crosshair';
+});
+
+overlayCanvas.addEventListener('mousemove', e => {
+  if (isDragging) return;
+  const rect = overlayCanvas.getBoundingClientRect();
+  const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+
+  // Grab cursor over rectifier
+  if (mode === 'drag' && rectAtXY(cx, cy)) {
+    overlayCanvas.style.cursor = 'grab';
+    tooltip.style.display = 'none';
+    return;
+  }
+
+  // Grab cursor over arrow in drag mode, pointer in arrow mode
+  const hovArrow = arrowAtXY(cx, cy);
+  if (hovArrow) {
+    overlayCanvas.style.cursor = mode === 'drag' ? 'grab' : 'pointer';
+    tooltip.style.display = 'none';
+    return;
+  }
+
+  const pin = pinAtXY(cx, cy);
+  if (pin) {
+    overlayCanvas.style.cursor = mode === 'drag' ? 'grab' : 'pointer';
+    document.getElementById('tt-name').textContent  = pin.address;
+    document.getElementById('tt-reads').textContent = pin.amps.toFixed(3) + 'A — ' + pin.label + (pin.isEstimate && pin.color !== 'open' ? ' (est.)' : '');
+    tooltip.style.display = 'block';
+    tooltip.style.left = (e.clientX + 14) + 'px';
+    tooltip.style.top  = (e.clientY - 10) + 'px';
+  } else {
+    overlayCanvas.style.cursor = mode === 'drag' ? 'grab' : 'crosshair';
+    tooltip.style.display = 'none';
+  }
+});
+
+overlayCanvas.addEventListener('mouseleave', () => { if (!isDragging) tooltip.style.display = 'none'; });
+
+// Right-click to delete an arrow
+overlayCanvas.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  const rect = overlayCanvas.getBoundingClientRect();
+  const cx = e.clientX - rect.left;
+  const cy = e.clientY - rect.top;
+  const arr = arrowAtXY(cx, cy);
+  if (arr) {
+    arrows = arrows.filter(a => a.id !== arr.id);
+    saveArrows(); drawOverlay();
+    setMsg('Arrow deleted.');
+  }
+});
+
+overlayCanvas.addEventListener('click', e => {
+  if (wasJustDragging) return;
+  const rect = overlayCanvas.getBoundingClientRect();
+  const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+
+  if (mode === 'drag') {
+    // Check rectifier click
+    if (rectAtXY(cx, cy)) { showRectDetail(e); return; }
+    // Check arrow click — rotate 90°
+    const arr = arrowAtXY(cx, cy);
+    if (arr) {
+      arr.dir = (arr.dir + 1) % 4;
+      saveArrows(); drawOverlay();
+      const dirLabels = ['→ Right', '↓ Down', '← Left', '↑ Up'];
+      setMsg('Arrow rotated: ' + dirLabels[arr.dir]);
+      return;
+    }
+    // Check pin click
+    const pin = pinAtXY(cx, cy);
+    if (pin) { showDetail(pin, e); return; }
+    return;
+  }
+
+  if (mode === 'arrow') {
+    if (!pdfPage) { setMsg('Upload a PDF map first.'); return; }
+    // Click existing arrow to rotate it
+    const arr = arrowAtXY(cx, cy);
+    if (arr) {
+      arr.dir = (arr.dir + 1) % 4;
+      saveArrows(); drawOverlay();
+      const dirLabels = ['→ Right', '↓ Down', '← Left', '↑ Up'];
+      setMsg('Arrow rotated: ' + dirLabels[arr.dir]);
+      return;
+    }
+    // Place new arrow
+    arrows.push({ id: Date.now(), x: cx / scale, y: cy / scale, dir: 0 });
+    saveArrows(); drawOverlay();
+    setMsg('Arrow placed — click it again to rotate 90°. Switch to Drag to reposition.');
+    return;
+  }
+
+  if (mode === 'rect') {
+    if (!pdfPage) { setMsg('Upload a PDF map first.'); return; }
+    const x = cx / scale, y = cy / scale;
+    if (!rectifier) rectifier = { x, y, station: '', amps: null, volts: null, minAmps: null, maxAmps: null, minVolts: null, maxVolts: null };
+    else { rectifier.x = x; rectifier.y = y; }
+    saveRectifier(); drawOverlay(); updateRectStatus();
+    openRectModal();
+    return;
+  }
+
+  if (mode === 'place') {
+    if (!pdfPage) { setMsg('Upload a PDF map first.'); return; }
+    // Check if clicked existing pin
+    const pin = pinAtXY(cx, cy);
+    if (pin) { showDetail(pin, e); return; }
+    placeNextUnplaced(cx / scale, cy / scale);
+  }
+});
+
+// ── EXPORT PDF ────────────────────────────────────────────────────────────────
+async function exportPDF() {
+  if (!pdfPage) { setMsg('No map loaded to export.'); return; }
+  setMsg('Preparing export...');
+
+  // Render to a full-res canvas
+  const exportCanvas  = document.createElement('canvas');
+  const exportOverlay = document.createElement('canvas');
+  const exportScale   = zoom * 3;
+  const vp = pdfPage.getViewport({ scale: exportScale });
+
+  exportCanvas.width  = vp.width;
+  exportCanvas.height = vp.height;
+  exportOverlay.width = vp.width;
+  exportOverlay.height= vp.height;
+
+  const exCtx = exportCanvas.getContext('2d');
+  await pdfPage.render({ canvasContext: exCtx, viewport: vp }).promise;
+
+  // Draw pins on export canvas
+  const exOvCtx = exportOverlay.getContext('2d');
+  const savedScale = scale;
+  scale = exportScale;
+  const savedCtx = overlayCtx;
+
+  // Temporarily redirect drawing to export canvas
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width  = exportCanvas.width;
+  tempCanvas.height = exportCanvas.height;
+  const tempCtx = tempCanvas.getContext('2d');
+  tempCtx.drawImage(exportCanvas, 0, 0);
+
+  // Re-draw overlay at export scale
+  exOvCtx.setTransform(1, 0, 0, 1, 0, 0);
+  const placedPins = pins.filter(p => p.placed);
+  for (const pin of placedPins) {
+    const sx = pin.x * exportScale;
+    const sy = pin.y * exportScale;
+    const r  = DIAMOND_R * exportScale;
+    const c  = COLORS[pin.color] || COLORS.none;
+
+    if (pin.color === 'open') {
+      exOvCtx.beginPath();
+      exOvCtx.arc(sx, sy, r * 0.75, 0, Math.PI * 2);
+      exOvCtx.fillStyle   = '#ffffff';
+      exOvCtx.fill();
+      exOvCtx.strokeStyle = '#000000';
+      exOvCtx.lineWidth   = 2;
+      exOvCtx.stroke();
+    } else {
+      exOvCtx.beginPath();
+      exOvCtx.moveTo(sx, sy - r); exOvCtx.lineTo(sx + r, sy);
+      exOvCtx.lineTo(sx, sy + r); exOvCtx.lineTo(sx - r, sy);
+      exOvCtx.closePath();
+      exOvCtx.fillStyle = c.fill; exOvCtx.fill();
+      if (pin.isEstimate) exOvCtx.setLineDash([6, 4]);
+      exOvCtx.strokeStyle = c.stroke; exOvCtx.lineWidth = 2; exOvCtx.stroke();
+      exOvCtx.setLineDash([]);
+    }
+    exOvCtx.font = `bold ${Math.round(8 * exportScale / 1.5)}px Courier New`;
+    exOvCtx.textAlign = 'center'; exOvCtx.textBaseline = 'top';
+    exOvCtx.fillStyle = pin.color === 'open' ? '#000' : c.stroke;
+    exOvCtx.shadowColor = 'rgba(0,0,0,0.8)'; exOvCtx.shadowBlur = 3;
+    exOvCtx.fillText(pin.amps.toFixed(2) + 'A', sx, sy + r + 2);
+    exOvCtx.shadowBlur = 0;
+  }
+
+  // Draw rectifier on export
+  if (rectifier && rectifier.x) {
+    const rx = rectifier.x * exportScale, ry = rectifier.y * exportScale;
+    const rs = 20 * exportScale / 1.5;
+    exOvCtx.beginPath(); exOvCtx.arc(rx, ry, rs, 0, Math.PI * 2);
+    exOvCtx.fillStyle = 'rgba(240,192,48,0.15)'; exOvCtx.fill();
+    exOvCtx.strokeStyle = '#f0c030'; exOvCtx.lineWidth = 2; exOvCtx.stroke();
+    exOvCtx.font = `bold ${Math.round(14 * exportScale / 1.5)}px Courier New`;
+    exOvCtx.textAlign = 'center'; exOvCtx.textBaseline = 'middle';
+    exOvCtx.fillStyle = '#f0c030'; exOvCtx.fillText('⚡', rx, ry);
+  }
+
+  // Composite
+  exCtx.drawImage(exportOverlay, 0, 0);
+
+  scale = savedScale;
+
+  const dataURL = exportCanvas.toDataURL('image/png');
+  const a = document.createElement('a');
+  a.href     = dataURL;
+  a.download = 'CP_Scout_Current_Map_' + new Date().toISOString().slice(0,10) + '.png';
+  a.click();
+  setMsg('Current map exported.');
+}
+
+// ── MISC ──────────────────────────────────────────────────────────────────────
+function clearAll() {
+  if (!confirm('Remove ALL pins and arrows from the current map? This cannot be undone.')) return;
+  pins = []; arrows = [];
+  savePins(); saveArrows(); drawOverlay(); renderSidebar();
+  setMsg('All pins and arrows cleared.');
+}
+
+function toggleLegend() {
+  const l = document.getElementById('legend-float');
+  l.style.display = l.style.display === 'none' ? 'block' : 'none';
+}
+
+function setMsg(msg) {
+  const el = document.getElementById('status-msg');
+  if (el) el.textContent = msg;
+  setTimeout(() => { const e = document.getElementById('status-msg'); if (e) e.textContent = ''; }, 5000);
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+loadState();
+renderSidebar();
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js")
+      .then(reg => { reg.update(); })
+      .catch(err => console.warn("[CP Scout] SW failed:", err));
+  });
+  navigator.serviceWorker.addEventListener('controllerchange', () => window.location.reload());
+}
+</script>
+</body>
+</html>
