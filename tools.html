@@ -151,6 +151,15 @@
   .formula-var { font-size: 10px; color: var(--text-dim); padding-left: 10px; border-left: 2px solid var(--border); line-height: 1.6; }
   .formula-var .fv-key { color: var(--teal); font-weight: bold; }
   .formula-purpose { font-size: 10px; color: var(--text-muted); margin-top: 6px; font-style: italic; line-height: 1.6; }
+  .example-calc { background: rgba(77,217,232,0.05); border: 1px solid var(--teal-dark); border-left: 3px solid var(--teal); padding: 10px 14px; margin-top: 10px; }
+  .example-calc .ex-title { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--teal); font-weight: bold; margin-bottom: 8px; }
+  .example-calc .ex-given { font-size: 10px; color: var(--text-dim); margin-bottom: 6px; }
+  .example-calc .ex-given span { color: var(--text); font-weight: bold; }
+  .example-calc .ex-step { font-size: 11px; color: var(--text-dim); padding: 3px 0; border-bottom: 1px solid rgba(106,115,125,0.2); }
+  .example-calc .ex-step:last-child { border-bottom: none; }
+  .example-calc .ex-step .ex-op { color: var(--text-muted); margin: 0 6px; }
+  .example-calc .ex-result { font-size: 13px; font-weight: bold; color: var(--teal); margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--teal-dark); }
+  .example-calc .ex-interp { font-size: 10px; color: var(--text-muted); margin-top: 4px; font-style: italic; }
   .notes-block { background: rgba(77,217,232,0.04); border: 1px solid var(--teal-dark); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
   .notes-block .nb-title { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--teal); font-weight: bold; margin-bottom: 2px; }
   .notes-block .nb-item { font-size: 11px; color: var(--text-dim); line-height: 1.7; padding-left: 10px; border-left: 2px solid var(--teal-dark); }
@@ -676,6 +685,7 @@
       <div class="card">
         <div class="formula-list">
 
+          <!-- ── 1. WENNER ── -->
           <div class="formula-item">
             <div class="formula-num">1</div>
             <div style="flex:1">
@@ -687,9 +697,18 @@
                 <div class="formula-var"><span class="fv-key">R</span> — Resistance measured by soil resistance meter (Ohms)</div>
               </div>
               <div class="formula-purpose">Standard field method for determining soil resistivity. Wider spacing = deeper investigation.</div>
+              <div class="example-calc">
+                <div class="ex-title">⚡ Example Calculation</div>
+                <div class="ex-given">Given: electrode spacing <span>a = 5 ft</span>, meter reads <span>R = 3.2 Ω</span></div>
+                <div class="ex-step">ρ <span class="ex-op">=</span> 191.5 × 5 × 3.2</div>
+                <div class="ex-step">ρ <span class="ex-op">=</span> 191.5 × 16</div>
+                <div class="ex-result">ρ = 3,064 Ohm-cm</div>
+                <div class="ex-interp">Interpretation: 3,000–10,000 Ohm-cm is considered moderately corrosive soil. Values below 1,000 Ohm-cm are highly corrosive and may require increased CP current output.</div>
+              </div>
             </div>
           </div>
 
+          <!-- ── 2. FARADAY ── -->
           <div class="formula-item">
             <div class="formula-num">2</div>
             <div style="flex:1">
@@ -697,14 +716,23 @@
               <div class="formula-eq">W = K × I × t</div>
               <div class="formula-var-list">
                 <div class="formula-var"><span class="fv-key">W</span> — Weight loss / mass consumed</div>
-                <div class="formula-var"><span class="fv-key">K</span> — Electrochemical equivalent (mass consumed per ampere-year)</div>
+                <div class="formula-var"><span class="fv-key">K</span> — Electrochemical equivalent (lbs/A-yr: magnesium ≈ 17.2, zinc ≈ 23.5)</div>
                 <div class="formula-var"><span class="fv-key">I</span> — Current (Amperes)</div>
                 <div class="formula-var"><span class="fv-key">t</span> — Time (years)</div>
               </div>
               <div class="formula-purpose">Calculates theoretical mass of an anode required to provide a specific current for a set lifespan.</div>
+              <div class="example-calc">
+                <div class="ex-title">⚡ Example Calculation</div>
+                <div class="ex-given">Given: magnesium anode (<span>K = 17.2 lbs/A-yr</span>), current output <span>I = 0.5 A</span>, design life <span>t = 10 years</span></div>
+                <div class="ex-step">W <span class="ex-op">=</span> 17.2 × 0.5 × 10</div>
+                <div class="ex-step">W <span class="ex-op">=</span> 17.2 × 5</div>
+                <div class="ex-result">W = 86 lbs of magnesium consumed</div>
+                <div class="ex-interp">Interpretation: A standard 17 lb magnesium anode would be consumed in roughly 2 years at this current draw. You would need at least a 60 lb anode (or multiple anodes in parallel) to achieve the 10-year design life.</div>
+              </div>
             </div>
           </div>
 
+          <!-- ── 3. OHM'S LAW ── -->
           <div class="formula-item">
             <div class="formula-num">3</div>
             <div style="flex:1">
@@ -716,23 +744,41 @@
                 <div class="formula-var"><span class="fv-key">R</span> — Resistance (Ohms)</div>
               </div>
               <div class="formula-purpose">Core relationship for calculating voltage drops, current flow, and circuit resistance in both ICCP and galvanic systems. See the Ohm's Law tool for the interactive solver.</div>
+              <div class="example-calc">
+                <div class="ex-title">⚡ Example Calculation</div>
+                <div class="ex-given">Given: rectifier output <span>V = 6 V</span>, total circuit resistance <span>R = 1.5 Ω</span> — find current output</div>
+                <div class="ex-step">I <span class="ex-op">=</span> V ÷ R</div>
+                <div class="ex-step">I <span class="ex-op">=</span> 6 ÷ 1.5</div>
+                <div class="ex-result">I = 4.0 A output current</div>
+                <div class="ex-interp">Interpretation: If the rectifier is set to 6V and the measured current is significantly lower than 4A, circuit resistance is higher than expected — check for broken bonds, corroded connections, or increased soil resistance since last survey.</div>
+              </div>
             </div>
           </div>
 
+          <!-- ── 4. IR DROP ── -->
           <div class="formula-item">
             <div class="formula-num">4</div>
             <div style="flex:1">
               <div class="formula-text" style="color:var(--text);font-weight:bold;margin-bottom:4px">IR Drop — Voltage Drop Correction</div>
               <div class="formula-eq">V<sub>measured</sub> = V<sub>polarized</sub> + (I × R<sub>soil</sub>)</div>
               <div class="formula-var-list">
-                <div class="formula-var"><span class="fv-key">V<sub>measured</sub></span> — Total voltage read by the voltmeter</div>
-                <div class="formula-var"><span class="fv-key">V<sub>polarized</sub></span> — Actual potential of structure relative to electrolyte</div>
-                <div class="formula-var"><span class="fv-key">I × R<sub>soil</sub></span> — Error voltage caused by current flowing through soil resistance</div>
+                <div class="formula-var"><span class="fv-key">V<sub>measured</sub></span> — Total voltage read by the voltmeter (ON-read)</div>
+                <div class="formula-var"><span class="fv-key">V<sub>polarized</sub></span> — True pipe potential vs electrolyte (instant-OFF read)</div>
+                <div class="formula-var"><span class="fv-key">I × R<sub>soil</sub></span> — Error voltage from current flowing through soil resistance</div>
               </div>
               <div class="formula-purpose">Isolates the true polarized potential of the pipe from errors introduced by current flowing through soil resistance — the basis for instant-off readings.</div>
+              <div class="example-calc">
+                <div class="ex-title">⚡ Example Calculation</div>
+                <div class="ex-given">Given: ON-read <span>V<sub>measured</sub> = −0.980 V</span>, current <span>I = 2 A</span>, soil resistance <span>R<sub>soil</sub> = 0.05 Ω</span></div>
+                <div class="ex-step">IR error <span class="ex-op">=</span> 2 A × 0.05 Ω <span class="ex-op">=</span> 0.100 V (100 mV)</div>
+                <div class="ex-step">V<sub>polarized</sub> <span class="ex-op">=</span> −0.980 − 0.100</div>
+                <div class="ex-result">V<sub>polarized</sub> = −0.880 V (instant-off potential)</div>
+                <div class="ex-interp">Interpretation: The ON-read of −980 mV appears to pass the −850 mV criterion, but 100 mV of that is IR error from soil current. The true polarized potential is −880 mV — still passing, but much closer to the threshold. This is why instant-off reads are critical for accurate NACE compliance.</div>
+              </div>
             </div>
           </div>
 
+          <!-- ── 5. CURRENT DENSITY ── -->
           <div class="formula-item">
             <div class="formula-num">5</div>
             <div style="flex:1">
@@ -744,6 +790,14 @@
                 <div class="formula-var"><span class="fv-key">A</span> — Total surface area of structure (m² or ft²)</div>
               </div>
               <div class="formula-purpose">Determines total current required for protection based on the surface area and coating efficiency of the pipeline.</div>
+              <div class="example-calc">
+                <div class="ex-title">⚡ Example Calculation</div>
+                <div class="ex-given">Given: 500 ft of 2" bare steel pipe — surface area ≈ <span>A = 261 ft²</span> (π × 2/12 × 500), target current density <span>J = 1.0 mA/ft²</span> (typical bare steel)</div>
+                <div class="ex-step">I <span class="ex-op">=</span> J × A</div>
+                <div class="ex-step">I <span class="ex-op">=</span> 1.0 mA/ft² × 261 ft²</div>
+                <div class="ex-result">I = 261 mA (0.261 A) required</div>
+                <div class="ex-interp">Interpretation: A well-coated pipe of the same length may only need 0.1–0.01 mA/ft², reducing the required current by 10–100×. Coating degradation over time directly increases current demand — rising rectifier output requirements are a key indicator of coating failure.</div>
+              </div>
             </div>
           </div>
 
