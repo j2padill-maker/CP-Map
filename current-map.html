@@ -724,7 +724,7 @@ function drawDiamond(pin) {
 function drawRectifier() {
   const rx = rectifier.x * scale;
   const ry = rectifier.y * scale;
-  const rs = Math.max(14, 16 * scale);
+  const rs = Math.max(28, 32 * scale); // doubled from 14/16
 
   // Check spec violations
   const ampViolation  = (rectifier.minAmps  && rectifier.amps  < rectifier.minAmps)  ||
@@ -750,7 +750,7 @@ function drawRectifier() {
   overlayCtx.stroke();
 
   // Lightning bolt
-  const rfs = Math.max(10, Math.min(16, 13 * scale));
+  const rfs = Math.max(20, Math.min(32, 26 * scale));
   overlayCtx.font         = `bold ${rfs}px Courier New`;
   overlayCtx.textAlign    = 'center';
   overlayCtx.textBaseline = 'middle';
@@ -761,7 +761,7 @@ function drawRectifier() {
   overlayCtx.shadowBlur   = 0;
 
   // RECT label below
-  const lfs = Math.max(7, Math.min(10, 8 * scale));
+  const lfs = Math.max(9, Math.min(13, 10 * scale));
   overlayCtx.font         = `bold ${lfs}px Courier New`;
   overlayCtx.fillStyle    = '#f0c030';
   overlayCtx.shadowColor  = 'rgba(0,0,0,0.9)';
@@ -782,19 +782,21 @@ function drawRectifier() {
 }
 
 // ── HIT TESTS ─────────────────────────────────────────────────────────────────
+// Note: mouse coords from getBoundingClientRect are CSS pixels.
+// Pins are stored in logical coords (cx/scale) and drawn at scale*quality.
+// So visual position in CSS px = pin.x * scale (quality cancels with canvas CSS size).
+// Hit test simply uses pin.x * scale vs raw CSS mouse coords — correct.
 function pinAtXY(cx, cy) {
-  // Diamond hit test: check if point is within rotated square bounds
   for (const pin of [...pins].reverse()) {
     if (!pin.placed) continue;
     const sx = pin.x * scale;
     const sy = pin.y * scale;
-    const r  = DIAMOND_R * scale + 6;
+    const r  = DIAMOND_R * scale + 8; // generous padding
     if (pin.color === 'open') {
-      // Circle hit test for open bonds
       const dx = sx - cx, dy = sy - cy;
-      if (Math.sqrt(dx*dx + dy*dy) <= r) return pin;
+      if (Math.sqrt(dx*dx + dy*dy) <= r * 0.75) return pin;
     } else {
-      // Diamond hit test (rotated square)
+      // Diamond (rotated square) hit test
       const dx = Math.abs(cx - sx);
       const dy = Math.abs(cy - sy);
       if (dx + dy <= r) return pin;
@@ -807,8 +809,8 @@ function rectAtXY(cx, cy) {
   if (!rectifier || !rectifier.x) return false;
   const dx = rectifier.x * scale - cx;
   const dy = rectifier.y * scale - cy;
-  const r  = Math.max(14, 16 * scale) * 1.6 + 8;
-  return Math.sqrt(dx*dx + dy*dy) <= r;
+  const rs = Math.max(28, 32 * scale); // doubled
+  return Math.sqrt(dx*dx + dy*dy) <= rs * 1.6 + 8;
 }
 
 function arrowAtXY(cx, cy) {
@@ -978,75 +980,80 @@ function flashPin(pin) {
 
 // ── DETAIL POPUP ──────────────────────────────────────────────────────────────
 function showDetail(pin, e) {
-  tooltip.style.display = 'none';
-  const popup = document.getElementById('detail-popup');
-  const c = COLORS[pin.color] || COLORS.none;
-  const colorLabel = COLOR_LABELS[pin.color] || '—';
+  try {
+    tooltip.style.display = 'none';
+    const popup = document.getElementById('detail-popup');
+    const c = COLORS[pin.color] || COLORS.none;
+    const colorLabel = COLOR_LABELS[pin.color] || '—';
+    const amps = parseFloat(pin.amps) || 0;
 
-  let bodyHTML = `
-    <div class="dp-row"><span class="dp-label">Type</span><span class="dp-val">${pin.type === 'bond' ? '🔗 Bond Check' : '🔌 Drop Check'}</span></div>
-    <div class="dp-row"><span class="dp-label">Status</span><span class="dp-val" style="color:${c.stroke}">${colorLabel}</span></div>
-    <div class="dp-row"><span class="dp-label">Amps</span><span class="dp-val">${pin.amps.toFixed(3)} A</span></div>`;
+    let bodyHTML = `
+      <div class="dp-row"><span class="dp-label">Type</span><span class="dp-val">${pin.type === 'bond' ? '🔗 Bond Check' : '🔌 Drop Check'}</span></div>
+      <div class="dp-row"><span class="dp-label">Status</span><span class="dp-val" style="color:${c.stroke}">${colorLabel}</span></div>
+      <div class="dp-row"><span class="dp-label">Amps</span><span class="dp-val">${amps.toFixed(3)} A</span></div>`;
 
-  if (pin.ratio) {
-    bodyHTML += `<div class="dp-row"><span class="dp-label">Ratio</span><span class="dp-val" style="color:${c.stroke}">${pin.ratio}×</span></div>`;
-  }
-  if (pin.expected && pin.expected !== '—') {
-    bodyHTML += `<div class="dp-row"><span class="dp-label">Expected</span><span class="dp-val">${pin.expected}</span></div>`;
-  }
-  if (pin.formula) {
-    bodyHTML += `<div class="dp-row"><span class="dp-label">Formula</span><span class="dp-val" style="font-size:9px">${pin.formula}</span></div>`;
-  }
-  if (pin.pipeLabel && pin.pipeLabel !== '—') {
-    bodyHTML += `<div class="dp-row"><span class="dp-label">Pipe</span><span class="dp-val">${pin.pipeLabel}</span></div>`;
-  }
-  if (pin.histDelta && pin.histDelta !== '—') {
-    bodyHTML += `<div class="dp-row"><span class="dp-label">Hist. Δ</span><span class="dp-val">${pin.histDelta}</span></div>`;
-  }
-  if (pin.date) {
-    bodyHTML += `<div class="dp-row"><span class="dp-label">Date</span><span class="dp-val">${pin.date}</span></div>`;
-  }
+    if (pin.ratio) {
+      bodyHTML += `<div class="dp-row"><span class="dp-label">Ratio</span><span class="dp-val" style="color:${c.stroke}">${pin.ratio}×</span></div>`;
+    }
+    if (pin.expected && pin.expected !== '—') {
+      bodyHTML += `<div class="dp-row"><span class="dp-label">Expected</span><span class="dp-val">${pin.expected}</span></div>`;
+    }
+    if (pin.formula) {
+      bodyHTML += `<div class="dp-row"><span class="dp-label">Formula</span><span class="dp-val" style="font-size:9px">${pin.formula}</span></div>`;
+    }
+    if (pin.pipeLabel && pin.pipeLabel !== '—') {
+      bodyHTML += `<div class="dp-row"><span class="dp-label">Pipe</span><span class="dp-val">${pin.pipeLabel}</span></div>`;
+    }
+    if (pin.histDelta && pin.histDelta !== '—') {
+      bodyHTML += `<div class="dp-row"><span class="dp-label">Hist. Δ</span><span class="dp-val">${pin.histDelta}</span></div>`;
+    }
+    if (pin.date) {
+      bodyHTML += `<div class="dp-row"><span class="dp-label">Date</span><span class="dp-val">${pin.date}</span></div>`;
+    }
 
-  bodyHTML += `<div class="dp-reason ${pin.color}">${colorReason(pin)}</div>`;
+    bodyHTML += `<div class="dp-reason ${pin.color}">${colorReason(pin)}</div>`;
 
-  if (pin.notes) {
-    bodyHTML += `<div style="font-size:9px;color:var(--text-muted);margin-top:6px;font-style:italic">Notes: ${pin.notes}</div>`;
+    if (pin.notes) {
+      bodyHTML += `<div style="font-size:9px;color:var(--text-muted);margin-top:6px;font-style:italic">Notes: ${pin.notes}</div>`;
+    }
+    if (pin.isEstimate && pin.color !== 'open') {
+      bodyHTML += `<div style="font-size:9px;color:var(--yellow);margin-top:6px">◇ Estimate — no historical data available. Scoring based on station cross-comparison.</div>`;
+    }
+
+    document.getElementById('dp-title').textContent = pin.address || '—';
+    document.getElementById('dp-body').innerHTML = bodyHTML;
+
+    const pw = 320, margin = 10, navH = 80;
+    popup.style.width     = pw + 'px';
+    popup.style.left      = '-9999px';
+    popup.style.top       = '0px';
+    popup.style.maxHeight = '';
+    popup.style.overflowY = '';
+    popup.style.display   = 'block';
+
+    const ph     = popup.offsetHeight;
+    const clickX = e ? e.clientX : window.innerWidth  / 2;
+    const clickY = e ? e.clientY : window.innerHeight / 2;
+    let left = clickX + 16;
+    if (left + pw > window.innerWidth  - margin) left = clickX - pw - 16;
+    left = Math.max(margin, left);
+    const roomBelow = window.innerHeight - clickY - margin;
+    const roomAbove = clickY - navH - margin;
+    let top;
+    if (ph <= roomBelow)      top = clickY - 20;
+    else if (ph <= roomAbove) top = clickY - ph + 20;
+    else {
+      popup.style.maxHeight = (window.innerHeight - navH - margin * 2) + 'px';
+      popup.style.overflowY = 'auto';
+      top = navH + margin;
+    }
+    top = Math.max(navH + margin, top);
+    popup.style.left = left + 'px';
+    popup.style.top  = top  + 'px';
+    if (pin.placed) flashPin(pin);
+  } catch(err) {
+    console.error('[showDetail error]', err, pin);
   }
-  if (pin.isEstimate && pin.color !== 'open') {
-    bodyHTML += `<div style="font-size:9px;color:var(--yellow);margin-top:6px">◇ Estimate — no historical data available for this location. Scoring based on station cross-comparison.</div>`;
-  }
-
-  document.getElementById('dp-title').textContent = pin.address;
-  document.getElementById('dp-body').innerHTML = bodyHTML;
-
-  const pw = 320, margin = 10, navH = 80;
-  popup.style.width = pw + 'px';
-  popup.style.left  = '-9999px';
-  popup.style.top   = '0px';
-  popup.style.maxHeight = '';
-  popup.style.overflowY = '';
-  popup.style.display   = 'block';
-
-  const ph     = popup.offsetHeight;
-  const clickX = e ? e.clientX : window.innerWidth  / 2;
-  const clickY = e ? e.clientY : window.innerHeight / 2;
-  let left = clickX + 16;
-  if (left + pw > window.innerWidth - margin) left = clickX - pw - 16;
-  left = Math.max(margin, left);
-  const roomBelow = window.innerHeight - clickY - margin;
-  const roomAbove = clickY - navH - margin;
-  let top;
-  if (ph <= roomBelow)       top = clickY - 20;
-  else if (ph <= roomAbove)  top = clickY - ph + 20;
-  else {
-    popup.style.maxHeight = (window.innerHeight - navH - margin * 2) + 'px';
-    popup.style.overflowY = 'auto';
-    top = navH + margin;
-  }
-  top = Math.max(navH + margin, top);
-  popup.style.left = left + 'px';
-  popup.style.top  = top  + 'px';
-  if (pin.placed) flashPin(pin);
 }
 
 function showRectDetail(e) {
@@ -1235,14 +1242,22 @@ overlayCanvas.addEventListener('mousemove', e => {
   const rect = overlayCanvas.getBoundingClientRect();
   const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
 
-  // Grab cursor over rectifier
-  if (mode === 'drag' && rectAtXY(cx, cy)) {
-    overlayCanvas.style.cursor = 'grab';
-    tooltip.style.display = 'none';
+  // Rectifier hover — show amp/volt tooltip
+  if (rectAtXY(cx, cy)) {
+    overlayCanvas.style.cursor = mode === 'drag' ? 'grab' : 'pointer';
+    if (rectifier) {
+      document.getElementById('tt-name').textContent = '⚡ Rectifier — Stn ' + (rectifier.station || '—');
+      document.getElementById('tt-reads').textContent =
+        (rectifier.amps  != null ? rectifier.amps  + 'A' : '—A') + '  /  ' +
+        (rectifier.volts != null ? rectifier.volts + 'V' : '—V');
+    }
+    tooltip.style.display = 'block';
+    tooltip.style.left = (e.clientX + 14) + 'px';
+    tooltip.style.top  = (e.clientY - 10) + 'px';
     return;
   }
 
-  // Grab cursor over arrow in drag mode, pointer in arrow mode
+  // Arrow hover
   const hovArrow = arrowAtXY(cx, cy);
   if (hovArrow) {
     overlayCanvas.style.cursor = mode === 'drag' ? 'grab' : 'pointer';
@@ -1250,6 +1265,7 @@ overlayCanvas.addEventListener('mousemove', e => {
     return;
   }
 
+  // Pin hover
   const pin = pinAtXY(cx, cy);
   if (pin) {
     overlayCanvas.style.cursor = mode === 'drag' ? 'grab' : 'pointer';
