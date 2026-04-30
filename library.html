@@ -110,6 +110,12 @@
   ::-webkit-scrollbar { width: 5px; }
   ::-webkit-scrollbar-track { background: var(--surface); }
   ::-webkit-scrollbar-thumb { background: var(--border); }
+  @media (max-width: 768px) {
+    .nav-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .nav-tabs::-webkit-scrollbar { display: none; }
+    .nav-tab { font-size: 10px; padding: 0 10px; white-space: nowrap; }
+    .landing-grid { grid-template-columns: 1fr 1fr; }
+  }
 </style>
 </head>
 <body>

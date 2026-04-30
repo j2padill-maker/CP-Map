@@ -1,7 +1,7 @@
 // CP Scout Service Worker
 // Caches all app pages and CDN assets for offline field use
 
-const CACHE_NAME = 'cp-scout-v4';
+const CACHE_NAME = 'cp-scout-v5';
 
 // All local pages to cache on install
 const STATIC_ASSETS = [

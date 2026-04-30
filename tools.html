@@ -31,6 +31,7 @@
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: 'Courier New', monospace; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  @media (max-width: 768px) { body { height: auto; min-height: 100vh; overflow-y: auto; } .main { flex-direction: column; overflow: visible; } .sidebar { width: 100%; height: auto; border-right: none; border-bottom: 2px solid var(--teal-dark); overflow: visible; } .chart-panel, .content-panel { overflow: visible; height: auto; } }
 
   /* NAV */
   nav { background: var(--surface); border-bottom: 2px solid var(--teal-dark); display: flex; align-items: center; padding: 0 16px; flex-shrink: 0; height: 48px; }

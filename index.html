@@ -57,6 +57,12 @@
   .landing-card.coming-soon:hover { border-color: var(--border); background: var(--surface); transform: none; }
   .badge { display: inline-block; font-size: 8px; background: var(--teal-dark); color: #fff; padding: 1px 6px; letter-spacing: 1px; text-transform: uppercase; margin-top: 6px; }
   .badge.soon { background: var(--panel); color: var(--text-muted); }
+  @media (max-width: 768px) {
+    .nav-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .nav-tabs::-webkit-scrollbar { display: none; }
+    .nav-tab { font-size: 10px; padding: 0 10px; white-space: nowrap; }
+    .landing-grid { grid-template-columns: 1fr 1fr; }
+  }
 </style>
 </head>
 <body>

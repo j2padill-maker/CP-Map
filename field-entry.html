@@ -116,6 +116,12 @@ nav { background: var(--surface); border-bottom: 2px solid var(--teal-dark); dis
 
 /* STATUS BAR */
 .status-bar { background: var(--surface); border-top: 1px solid var(--border); padding: 6px 16px; font-size: 10px; color: var(--text-muted); letter-spacing: 1px; display: flex; gap: 20px; }
+  @media (max-width: 768px) {
+    .nav-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .nav-tabs::-webkit-scrollbar { display: none; }
+    .nav-tab { font-size: 10px; padding: 0 10px; white-space: nowrap; }
+    .landing-grid { grid-template-columns: 1fr 1fr; }
+  }
 </style>
 </head>
 <body>
