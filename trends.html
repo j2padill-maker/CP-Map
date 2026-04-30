@@ -123,7 +123,23 @@
   .ov-val { font-size: 9px; color: var(--text-dim); }
   .ov-arrow { font-size: 11px; flex-shrink: 0; }
 
-  /* STATUS BAR */
+  /* DATE RANGE FILTER */
+  .range-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex-shrink: 0; }
+  .range-label { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--teal); font-weight: bold; white-space: nowrap; }
+  .range-toggle { display: flex; border: 1px solid var(--border); overflow: hidden; flex-shrink: 0; }
+  .range-toggle button { background: var(--panel); border: none; color: var(--text-dim); padding: 5px 10px; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; font-family: inherit; transition: all .15s; }
+  .range-toggle button.active { background: var(--teal-dark); color: #fff; font-weight: bold; }
+  .range-toggle button:hover:not(.active) { background: var(--panel-light); color: var(--text); }
+  .range-inputs { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .range-inputs label { font-size: 9px; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; }
+  .range-inputs select, .range-inputs input { background: var(--panel); border: 1px solid var(--border); color: var(--text); padding: 5px 8px; font-size: 11px; font-family: inherit; }
+  .range-inputs select:focus, .range-inputs input:focus { outline: none; border-color: var(--teal); }
+  .range-sep { color: var(--text-muted); font-size: 11px; }
+  .range-btn { padding: 5px 14px; background: var(--teal-dark); border: 1px solid var(--teal); color: #fff; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; font-family: inherit; transition: all .15s; }
+  .range-btn:hover { background: var(--teal-dim); }
+  .range-btn.reset { background: transparent; border-color: var(--border); color: var(--text-muted); }
+  .range-btn.reset:hover { border-color: var(--teal); color: var(--teal); }
+  .range-info { font-size: 9px; color: var(--text-muted); margin-left: auto; letter-spacing: 1px; }
   .status-bar { background: var(--surface); border-top: 1px solid var(--border); padding: 5px 14px; font-size: 10px; color: var(--text-dim); letter-spacing: 1px; flex-shrink: 0; display: flex; gap: 20px; align-items: center; }
   .s-label { color: var(--text-muted); }
   .s-val { color: var(--teal); font-weight: bold; }
@@ -150,7 +166,24 @@
   </div>
 </nav>
 
-<div class="main">
+<div style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+
+  <!-- DATE RANGE BAR — spans full width above sidebar and chart -->
+  <div class="range-bar" id="range-bar">
+    <span class="range-label">Date Range</span>
+    <div class="range-toggle">
+      <button id="mode-year" class="active" onclick="setRangeMode('year')">Year</button>
+      <button id="mode-month" onclick="setRangeMode('month')">Month + Year</button>
+    </div>
+    <div class="range-inputs" id="range-inputs">
+      <!-- populated by JS based on mode -->
+    </div>
+    <button class="range-btn" onclick="applyRange()">▶ Apply</button>
+    <button class="range-btn reset" onclick="resetRange()">↺ Reset</button>
+    <span class="range-info" id="range-info"></span>
+  </div>
+
+  <div class="main">
 
   <div class="sidebar">
     <div class="sidebar-hdr">
@@ -166,7 +199,8 @@
 
   <div class="chart-panel" id="chart-panel"></div>
 
-</div>
+  </div><!-- end main -->
+</div><!-- end column wrapper -->
 
 <div class="status-bar">
   <span><span class="s-label">MODULE </span><span class="s-val">TRENDS</span></span>
@@ -186,6 +220,12 @@ let tpKeys   = [];
 let filtered = [];
 let activeTP = null;
 let activeChart = null;
+
+// Date range filter state
+let rangeMode  = 'year';   // 'year' or 'month'
+let rangeFrom  = null;     // 'YYYY' or 'YYYY-MM'
+let rangeTo    = null;     // 'YYYY' or 'YYYY-MM'
+let allCycleKeys = [];     // all unique cycle dateKeys from full dataset
 
 // ── COLUMN DETECTION (mirrors overview.html exactly) ─────────────────────────
 function detectColumns(rows) {
@@ -409,10 +449,24 @@ function renderChart(tp) {
   const d = tpMap[tp];
   if (!d) return;
 
+  // Apply date range filter — all stats and chart use filtered cycles
+  const cycles = filterCycles(d.cycles);
+  const allCy  = d.cycles; // unfiltered — used for scoring context only
+
+  if (!cycles.length) {
+    document.getElementById('chart-panel').innerHTML = `
+      <div class="empty-state">
+        <div class="es-icon">📅</div>
+        <h2>No Data in Selected Range</h2>
+        <p>TP ${tp} has no survey cycles within the selected date range.<br>Try adjusting the range or clicking ↺ Reset.</p>
+      </div>`;
+    return;
+  }
+
   const score  = scorePoint(tp);
-  const trend  = trendLabel(d.cycles);
-  const latest = d.cycles[0] || { off: null, on: null };
-  const drop   = largestDrop(d.cycles);
+  const trend  = trendLabel(cycles);
+  const latest = cycles[0] || { off: null, on: null };
+  const drop   = largestDrop(cycles);
 
   const offLatest = latest.off !== null ? (latest.off * 1000).toFixed(0) + ' mV' : '—';
   const onLatest  = latest.on  !== null ? (latest.on  * 1000).toFixed(0) + ' mV' : '—';
@@ -420,9 +474,9 @@ function renderChart(tp) {
     ? Math.round((latest.on - latest.off) * 1000) + ' mV' : '—';
   const limitDisp = d.offLimit !== null ? (d.offLimit * 1000).toFixed(0) + ' mV' : 'NOT SET';
   const dropColor = drop === null ? 'var(--text)' : drop >= 50 ? 'var(--red)' : drop >= 35 ? 'var(--orange)' : 'var(--text)';
-  const dateRange = d.cycles.length > 1
-    ? d.cycles[d.cycles.length-1].dateKey + ' → ' + d.cycles[0].dateKey
-    : d.cycles.length === 1 ? d.cycles[0].dateKey : '—';
+  const dateRange = cycles.length > 1
+    ? cycles[cycles.length-1].dateKey + ' → ' + cycles[0].dateKey
+    : cycles.length === 1 ? cycles[0].dateKey : '—';
 
   document.getElementById('chart-panel').innerHTML = `
     <div class="chart-content" id="chart-content">
@@ -451,7 +505,7 @@ function renderChart(tp) {
         </div>
         <div class="stat-box">
           <div class="stat-label">Survey Cycles</div>
-          <div class="stat-val teal">${d.cycles.length}</div>
+          <div class="stat-val teal">${cycles.length}</div>
           <div class="stat-sub">${dateRange}</div>
         </div>
       </div>
@@ -474,7 +528,7 @@ function renderChart(tp) {
         </div>
         <div class="stat-box">
           <div class="stat-label">Latest Cycle</div>
-          <div class="stat-val sm teal">${d.cycles[0] ? d.cycles[0].dateKey : '—'}</div>
+          <div class="stat-val sm teal">${cycles[0] ? cycles[0].dateKey : '—'}</div>
           <div class="stat-sub">Most recent survey date</div>
         </div>
       </div>
@@ -500,23 +554,23 @@ function renderChart(tp) {
 
     </div>`;
 
-  drawChart(tp, d);
+  drawChart(tp, d, cycles);
   renderOverviewGrid(tp);
-  setMsg('TP ' + tp + ' — ' + d.cycles.length + ' survey cycle' + (d.cycles.length !== 1 ? 's' : '') + ' loaded');
+  setMsg('TP ' + tp + ' — ' + cycles.length + ' cycle' + (cycles.length !== 1 ? 's' : '') + ' in range');
 }
 
 // ── CHART.JS ──────────────────────────────────────────────────────────────────
-function drawChart(tp, d) {
+function drawChart(tp, d, cycles) {
   if (activeChart) { activeChart.destroy(); activeChart = null; }
   const canvas = document.getElementById('main-chart');
   if (!canvas) return;
 
   // Chronological order for chart (oldest → newest)
-  const chrono = [...d.cycles].reverse();
+  const chrono = [...cycles].reverse();
   const labels  = chrono.map(c => c.dateKey);
   const offData = chrono.map(c => c.off !== null ? parseFloat((c.off * 1000).toFixed(1)) : null);
   const onData  = chrono.map(c => c.on  !== null ? parseFloat((c.on  * 1000).toFixed(1)) : null);
-  const ptColors = chrono.map(c => dotColor(c.off, d.cycles));
+  const ptColors = chrono.map(c => dotColor(c.off, cycles));
 
   const datasets = [
     {
@@ -657,6 +711,102 @@ function showNoSelection() {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
+// ── DATE RANGE FUNCTIONS ──────────────────────────────────────────────────────
+function getYears()  { return [...new Set(allCycleKeys.map(k => k.slice(0,4)))].sort(); }
+function getMonths() { return [...allCycleKeys].sort(); }
+
+function buildRangeInputs() {
+  const container = document.getElementById('range-inputs');
+  if (rangeMode === 'year') {
+    const years = getYears();
+    if (!years.length) { container.innerHTML = '<span style="font-size:10px;color:var(--text-muted)">No data loaded</span>'; return; }
+    const fromVal = rangeFrom ? rangeFrom.slice(0,4) : years[0];
+    const toVal   = rangeTo   ? rangeTo.slice(0,4)   : years[years.length-1];
+    const opts    = years.map(y => `<option value="${y}">${y}</option>`).join('');
+    container.innerHTML = `
+      <label>From</label>
+      <select id="range-from">${opts}</select>
+      <span class="range-sep">→</span>
+      <label>To</label>
+      <select id="range-to">${opts}</select>`;
+    document.getElementById('range-from').value = fromVal;
+    document.getElementById('range-to').value   = toVal;
+  } else {
+    const months   = getMonths();
+    if (!months.length) { container.innerHTML = '<span style="font-size:10px;color:var(--text-muted)">No data loaded</span>'; return; }
+    const fromVal  = rangeFrom || months[0];
+    const toVal    = rangeTo   || months[months.length-1];
+    const fmtLabel = k => { const [y,m] = k.split('-'); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(m)-1] + ' ' + y; };
+    const opts     = months.map(k => `<option value="${k}">${fmtLabel(k)}</option>`).join('');
+    container.innerHTML = `
+      <label>From</label>
+      <select id="range-from">${opts}</select>
+      <span class="range-sep">→</span>
+      <label>To</label>
+      <select id="range-to">${opts}</select>`;
+    document.getElementById('range-from').value = fromVal;
+    document.getElementById('range-to').value   = toVal;
+  }
+}
+
+function setRangeMode(mode) {
+  rangeMode = mode;
+  document.getElementById('mode-year').classList.toggle('active',  mode === 'year');
+  document.getElementById('mode-month').classList.toggle('active', mode === 'month');
+  // Convert existing range values to new mode
+  if (mode === 'year') {
+    if (rangeFrom) rangeFrom = rangeFrom.slice(0,4);
+    if (rangeTo)   rangeTo   = rangeTo.slice(0,4);
+  }
+  buildRangeInputs();
+}
+
+function applyRange() {
+  const fromEl = document.getElementById('range-from');
+  const toEl   = document.getElementById('range-to');
+  if (!fromEl || !toEl) return;
+  rangeFrom = fromEl.value;
+  rangeTo   = toEl.value;
+  // Ensure from <= to
+  if (rangeFrom > rangeTo) { const tmp = rangeFrom; rangeFrom = rangeTo; rangeTo = tmp; buildRangeInputs(); }
+  updateRangeInfo();
+  renderList();
+  if (activeTP) renderChart(activeTP);
+}
+
+function resetRange() {
+  const years  = getYears();
+  const months = getMonths();
+  rangeFrom = rangeMode === 'year' ? (years[0]  || null) : (months[0]  || null);
+  rangeTo   = rangeMode === 'year' ? (years[years.length-1]   || null) : (months[months.length-1] || null);
+  buildRangeInputs();
+  updateRangeInfo();
+  renderList();
+  if (activeTP) renderChart(activeTP);
+}
+
+function updateRangeInfo() {
+  const el = document.getElementById('range-info');
+  if (!el) return;
+  if (!rangeFrom && !rangeTo) { el.textContent = ''; return; }
+  const cycles = filterCycles(Object.values(tpMap)[0]?.cycles || []);
+  el.textContent = rangeFrom + ' → ' + rangeTo + ' · ' + allCycleKeys.filter(k => inRange(k)).length + ' cycles in range';
+}
+
+function inRange(dateKey) {
+  if (!rangeFrom && !rangeTo) return true;
+  // Normalize comparison — year mode compares YYYY prefix only
+  const key  = rangeMode === 'year' ? dateKey.slice(0,4) : dateKey;
+  const from = rangeFrom || '0000';
+  const to   = rangeTo   || '9999';
+  return key >= from && key <= to;
+}
+
+function filterCycles(cycles) {
+  if (!rangeFrom && !rangeTo) return cycles;
+  return cycles.filter(c => inRange(c.dateKey));
+}
+
 function init() {
   let rawData = [];
   try {
@@ -679,15 +829,23 @@ function init() {
   });
   filtered = [...tpKeys];
 
-  // Count unique survey cycles across all TPs
-  const allCycles = new Set();
-  for (const d of Object.values(tpMap)) d.cycles.forEach(c => allCycles.add(c.dateKey));
+  // Collect all unique cycle dateKeys across all TPs
+  const allCyclesSet = new Set();
+  for (const d of Object.values(tpMap)) d.cycles.forEach(c => allCyclesSet.add(c.dateKey));
+  allCycleKeys = [...allCyclesSet].sort();
 
-  document.getElementById('tp-count').textContent         = tpKeys.length + ' TPs';
-  document.getElementById('sb-cycles').textContent        = allCycles.size;
-  document.getElementById('sb-tps').textContent           = tpKeys.length;
-  document.getElementById('sidebar-footer').textContent   = localStorage.getItem(FNAME_KEY) || 'Data loaded';
+  // Set default range to full extent
+  const years = [...new Set(allCycleKeys.map(k => k.slice(0,4)))].sort();
+  rangeFrom = years[0]  || null;
+  rangeTo   = years[years.length-1] || null;
 
+  document.getElementById('tp-count').textContent       = tpKeys.length + ' TPs';
+  document.getElementById('sb-cycles').textContent      = allCycleKeys.length;
+  document.getElementById('sb-tps').textContent         = tpKeys.length;
+  document.getElementById('sidebar-footer').textContent = localStorage.getItem(FNAME_KEY) || 'Data loaded';
+
+  buildRangeInputs();
+  updateRangeInfo();
   renderList();
   showNoSelection();
 }
