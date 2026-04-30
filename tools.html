@@ -355,12 +355,12 @@
       <div class="card">
         <div class="card-title">Current Anomaly Scale</div>
         <div class="scale-legend">
-          <div class="scale-item"><div class="scale-dot" style="background:var(--red)"></div>&gt;2.0× expected — CRITICAL</div>
-          <div class="scale-item"><div class="scale-dot" style="background:var(--orange)"></div>1.5–2.0× — HIGH CONCERN</div>
-          <div class="scale-item"><div class="scale-dot" style="background:var(--yellow)"></div>1.1–1.5× — ELEVATED</div>
-          <div class="scale-item"><div class="scale-dot" style="background:var(--green)"></div>0.6–1.1× — NORMAL</div>
-          <div class="scale-item"><div class="scale-dot" style="background:var(--blue)"></div>0.3–0.6× — LOW</div>
-          <div class="scale-item"><div class="scale-dot" style="background:var(--blue); opacity:.5"></div>&lt;0.3× — CRITICALLY LOW</div>
+          <div class="scale-item"><div class="scale-dot" style="background:var(--red)"></div>&gt;+80% / &gt;1.80× — CRITICAL</div>
+          <div class="scale-item"><div class="scale-dot" style="background:var(--orange)"></div>+31–80% / 1.31–1.80× — HIGH CONCERN</div>
+          <div class="scale-item"><div class="scale-dot" style="background:var(--yellow)"></div>+11–30% / 1.11–1.30× — ELEVATED</div>
+          <div class="scale-item"><div class="scale-dot" style="background:var(--green)"></div>−40–+10% / 0.60–1.10× — NORMAL</div>
+          <div class="scale-item"><div class="scale-dot" style="background:var(--blue)"></div>−70–−41% / 0.30–0.59× — LOW</div>
+          <div class="scale-item"><div class="scale-dot" style="background:var(--blue); opacity:.5"></div>&lt;−70% / &lt;0.30× — CRITICALLY LOW</div>
         </div>
       </div>
     </div>
@@ -872,11 +872,12 @@ function syncRectifier() {
 // ── SCORING HELPERS ───────────────────────────────────────────────────────────
 function scoreAmps(actual, expected) {
   const ratio = actual / expected;
-  if      (ratio > 2.0) return { color: 'red',      label: 'CRITICAL',       ratio };
-  else if (ratio > 1.5) return { color: 'orange',   label: 'HIGH CONCERN',   ratio };
-  else if (ratio > 1.1) return { color: 'yellow',   label: 'ELEVATED',       ratio };
-  else if (ratio > 0.6) return { color: 'green',    label: 'NORMAL',         ratio };
-  else if (ratio > 0.3) return { color: 'blue',     label: 'LOW',            ratio };
+  if      (ratio > 1.80) return { color: 'red',      label: 'CRITICAL',       ratio };
+  else if (ratio > 1.30) return { color: 'orange',   label: 'HIGH CONCERN',   ratio };
+  else if (ratio > 1.10) return { color: 'yellow',   label: 'ELEVATED',       ratio };
+  else if (ratio > 0.60) return { color: 'green',    label: 'NORMAL',         ratio };
+  else if (ratio > 0.30) return { color: 'blue',     label: 'LOW',            ratio };
+  else                   return { color: 'blue-dim', label: 'CRITICALLY LOW', ratio };
   else                  return { color: 'blue-dim', label: 'CRITICALLY LOW', ratio };
 }
 

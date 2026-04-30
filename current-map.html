@@ -190,8 +190,9 @@
     <a class="nav-tab" href="library.html">📚 Library</a>
   </div>
   <div class="nav-map-btns">
-    <button class="mode-btn"        id="btn-save"  onclick="exportPDF()">⬇ Export</button>
-    <button class="mode-btn danger" id="btn-clear" onclick="clearAll()">✕ Clear Pins</button>
+    <button class="mode-btn"        id="btn-save"   onclick="exportPDF()">⬇ Export</button>
+    <button class="mode-btn danger" id="btn-delete" onclick="setMode('delete')">🗑 Delete</button>
+    <button class="mode-btn danger" id="btn-clear"  onclick="clearAll()">✕ Clear All</button>
   </div>
 </nav>
 
@@ -267,16 +268,17 @@
     </div>
     <div class="legend-float" id="legend-float">
       <h2>Current Map Legend</h2>
-      <div class="legend-item"><div class="legend-diamond" style="background:rgba(240,64,64,0.15);border-color:#f04040"></div> Critical (&gt;2.0×)</div>
-      <div class="legend-item"><div class="legend-diamond" style="background:rgba(240,128,32,0.15);border-color:#f08020"></div> High Concern (1.5–2.0×)</div>
-      <div class="legend-item"><div class="legend-diamond" style="background:rgba(232,208,32,0.15);border-color:#e8d020"></div> Elevated (1.1–1.5×)</div>
-      <div class="legend-item"><div class="legend-diamond" style="background:rgba(48,200,96,0.15);border-color:#0a7a30"></div> Normal (0.6–1.1×)</div>
-      <div class="legend-item"><div class="legend-diamond" style="background:rgba(77,166,255,0.15);border-color:#4da6ff"></div> Low (0.3–0.6×)</div>
-      <div class="legend-item"><div class="legend-diamond" style="background:rgba(77,166,255,0.07);border-color:rgba(77,166,255,0.4)"></div> Critically Low (&lt;0.3×)</div>
+      <div class="legend-item"><div class="legend-diamond" style="background:rgba(240,64,64,0.15);border-color:#f04040"></div> Critical (&gt;+80% / &gt;1.80×)</div>
+      <div class="legend-item"><div class="legend-diamond" style="background:rgba(240,128,32,0.15);border-color:#f08020"></div> High Concern (+31–80% / 1.31–1.80×)</div>
+      <div class="legend-item"><div class="legend-diamond" style="background:rgba(232,208,32,0.15);border-color:#e8d020"></div> Elevated (+11–30% / 1.11–1.30×)</div>
+      <div class="legend-item"><div class="legend-diamond" style="background:rgba(48,200,96,0.15);border-color:#0a7a30"></div> Normal (−40–+10% / 0.60–1.10×)</div>
+      <div class="legend-item"><div class="legend-diamond" style="background:rgba(77,166,255,0.15);border-color:#4da6ff"></div> Low (−70–−41% / 0.30–0.59×)</div>
+      <div class="legend-item"><div class="legend-diamond" style="background:rgba(77,166,255,0.07);border-color:rgba(77,166,255,0.4)"></div> Critically Low (&lt;−70% / &lt;0.30×)</div>
       <div class="legend-item"><div class="legend-diamond" style="background:rgba(77,217,232,0.15);border-color:var(--teal);border-style:dashed"></div> Estimate (no history)</div>
       <div class="legend-item"><div class="legend-circle" style="background:#fff;border-color:#000"></div> Open Bond</div>
       <div class="legend-item"><div class="legend-circle" style="background:rgba(240,192,48,0.15);border-color:#f0c030"></div> ⚡ Rectifier</div>
       <div class="legend-item"><div style="width:24px;height:2px;background:#000;position:relative;flex-shrink:0"><div style="position:absolute;right:-1px;top:-4px;width:0;height:0;border-left:8px solid #000;border-top:5px solid transparent;border-bottom:5px solid transparent"></div></div> &nbsp;Flow Arrow (click=rotate, right-click=delete)</div>
+      <div class="legend-item" style="color:var(--red);font-size:9px">🗑 Delete mode or right-click removes any item</div>
     </div>
     <button class="legend-toggle" id="legend-toggle" onclick="toggleLegend()">☰ Legend</button>
   </div>
@@ -613,11 +615,12 @@ async function changeZoom(delta) {
 // ── MODE ──────────────────────────────────────────────────────────────────────
 function setMode(m) {
   mode = m;
-  ['place','rect','arrow'].forEach(id => {
-    document.getElementById('btn-' + id).classList.toggle('active', id === m);
+  ['place','rect','arrow','delete'].forEach(id => {
+    const el = document.getElementById('btn-' + id);
+    if (el) el.classList.toggle('active', id === m);
   });
   if (m !== 'place') { selectedFeId = null; pendingPlacement = null; renderSidebar(); }
-  overlayCanvas.style.cursor = m === 'place' ? 'crosshair' : 'crosshair';
+  overlayCanvas.style.cursor = m === 'delete' ? 'not-allowed' : 'crosshair';
   document.getElementById('sb-mode').textContent = m.toUpperCase();
 }
 
@@ -843,7 +846,7 @@ function rectAtXY(cx, cy) {
 }
 
 function arrowAtXY(cx, cy) {
-  const hitR = ARROW_LEN * scale * 0.6; // generous hit radius
+  const hitR = Math.max(20, ARROW_LEN * scale * 0.8); // large minimum so easy to click at any zoom
   for (const arr of [...arrows].reverse()) {
     const dx = arr.x * scale - cx;
     const dy = arr.y * scale - cy;
@@ -1141,12 +1144,12 @@ function colorReason(pin) {
   const ratioStr = ratioVal.toFixed(2) + '×';
 
   const reasons = {
-    red:       `<b style="color:var(--red)">⚠ CRITICAL:</b> ${typeStr} reading of ${ampsStr} is ${ratioStr} of expected — more than 2× the baseline. This is a strong indicator of a short circuit, major coating failure, or foreign structure interference. Immediate investigation required.`,
-    orange:    `<b style="color:var(--orange)">⚠ HIGH CONCERN:</b> ${typeStr} reading of ${ampsStr} is ${ratioStr} of expected (1.5–2.0×). Significantly elevated current — suspect coating degradation, bond configuration issue, or developing short. Schedule investigation.`,
-    yellow:    `<b style="color:var(--yellow)">△ ELEVATED:</b> ${typeStr} reading of ${ampsStr} is ${ratioStr} of expected (1.1–1.5×). Above normal range. Document and monitor closely — investigate if trend continues over subsequent surveys.`,
-    green:     `<b style="color:var(--green)">✓ NORMAL:</b> ${typeStr} reading of ${ampsStr} is ${ratioStr} of expected (0.6–1.1×). Current distribution within expected range for this location. No action required.`,
-    blue:      `<b style="color:var(--blue)">↓ LOW:</b> ${typeStr} reading of ${ampsStr} is ${ratioStr} of expected (0.3–0.6×). Below expected — current may not be adequately reaching this segment. Check bond continuity and connections.`,
-    'blue-dim':`<b style="color:rgba(77,166,255,0.7)">↓↓ CRITICALLY LOW:</b> ${typeStr} reading of ${ampsStr} is ${ratioStr} of expected (below 0.3×). Very little current detected. Possible open bond, broken connection, or complete segment isolation. Investigate immediately.`,
+    red:       `<b style="color:var(--red)">⚠ CRITICAL:</b> ${typeStr} reading of ${ampsStr} is ${ratioStr} of expected — more than +80% above historic norm. Strong indicator of short circuit, major coating failure, or foreign structure interference. Immediate investigation required.`,
+    orange:    `<b style="color:var(--orange)">⚠ HIGH CONCERN:</b> ${typeStr} reading of ${ampsStr} is ${ratioStr} of expected (+31–80% above historic norm). Significantly elevated — suspect coating degradation, bond issue, or developing short. Schedule investigation.`,
+    yellow:    `<b style="color:var(--yellow)">△ ELEVATED:</b> ${typeStr} reading of ${ampsStr} is ${ratioStr} of expected (+11–30% above historic norm). Above normal range. Document and monitor closely — investigate if trend continues.`,
+    green:     `<b style="color:var(--green)">✓ NORMAL:</b> ${typeStr} reading of ${ampsStr} is ${ratioStr} of expected (within −40% to +10% of historic norm). Current distribution consistent with prior surveys. No action required.`,
+    blue:      `<b style="color:var(--blue)">↓ LOW:</b> ${typeStr} reading of ${ampsStr} is ${ratioStr} of expected (−41% to −70% below historic norm). Below expected — current may not be adequately reaching this segment. Check bond continuity and connections.`,
+    'blue-dim':`<b style="color:rgba(77,166,255,0.7)">↓↓ CRITICALLY LOW:</b> ${typeStr} reading of ${ampsStr} is ${ratioStr} of expected (more than −70% below historic norm). Very little current detected. Possible open bond, broken connection, or complete segment isolation. Investigate immediately.`,
   };
 
   let text = reasons[pin.color] || 'No scoring data available.';
@@ -1203,6 +1206,7 @@ function updateRectStatus() {
 
 // ── MOUSE EVENTS ──────────────────────────────────────────────────────────────
 overlayCanvas.addEventListener('mousedown', e => {
+  if (mode === 'delete') return; // no dragging in delete mode
   const rect = overlayCanvas.getBoundingClientRect();
   const cx = e.clientX - rect.left;
   const cy = e.clientY - rect.top;
@@ -1300,31 +1304,52 @@ overlayCanvas.addEventListener('mousemove', e => {
   // Pin hover — grab cursor on placed pins in all modes
   const pin = pinAtXY(cx, cy);
   if (pin) {
-    overlayCanvas.style.cursor = pin.placed ? 'grab' : 'pointer';
+    overlayCanvas.style.cursor = mode === 'delete' ? 'not-allowed' : pin.placed ? 'grab' : 'pointer';
     document.getElementById('tt-name').textContent  = pin.address;
     document.getElementById('tt-reads').textContent = parseFloat(pin.amps).toFixed(3) + 'A — ' + pin.label + (pin.isEstimate && pin.color !== 'open' ? ' (est.)' : '');
     tooltip.style.display = 'block';
     tooltip.style.left = (e.clientX + 14) + 'px';
     tooltip.style.top  = (e.clientY - 10) + 'px';
   } else {
-    overlayCanvas.style.cursor = mode === 'place' ? 'crosshair' : mode === 'drag' ? 'grab' : 'crosshair';
+    overlayCanvas.style.cursor = mode === 'delete' ? 'not-allowed' : mode === 'place' ? 'crosshair' : mode === 'drag' ? 'grab' : 'crosshair';
     tooltip.style.display = 'none';
   }
 });
 
 overlayCanvas.addEventListener('mouseleave', () => { if (!isDragging) tooltip.style.display = 'none'; });
 
-// Right-click to delete an arrow
+// Right-click deletes whatever is under the cursor — pins, arrows, or rectifier
 overlayCanvas.addEventListener('contextmenu', e => {
   e.preventDefault();
-  const rect = overlayCanvas.getBoundingClientRect();
-  const cx = e.clientX - rect.left;
-  const cy = e.clientY - rect.top;
+  e.stopPropagation();
+  const canvasRect = overlayCanvas.getBoundingClientRect();
+  const cx = e.clientX - canvasRect.left;
+  const cy = e.clientY - canvasRect.top;
+
+  // Check pin first
+  const pin = pinAtXY(cx, cy);
+  if (pin) {
+    pins = pins.filter(p => p.feId !== pin.feId);
+    savePins(); renderSidebar(); drawOverlay();
+    setMsg('Deleted: ' + pin.address);
+    return;
+  }
+  // Check arrow
   const arr = arrowAtXY(cx, cy);
   if (arr) {
     arrows = arrows.filter(a => a.id !== arr.id);
     saveArrows(); drawOverlay();
     setMsg('Arrow deleted.');
+    return;
+  }
+  // Check rectifier
+  if (rectAtXY(cx, cy)) {
+    if (confirm('Delete the rectifier marker?')) {
+      rectifier = null;
+      saveRectifier(); drawOverlay(); updateRectStatus();
+      setMsg('Rectifier removed.');
+    }
+    return;
   }
 });
 
@@ -1332,6 +1357,37 @@ overlayCanvas.addEventListener('click', e => {
   if (wasJustDragging) return;
   const rect = overlayCanvas.getBoundingClientRect();
   const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+
+  // ── DELETE mode — click anything to remove it ─────────────────────────────
+  if (mode === 'delete') {
+    // Check pin
+    const delPin = pinAtXY(cx, cy);
+    if (delPin) {
+      pins = pins.filter(p => p.feId !== delPin.feId);
+      savePins(); renderSidebar(); drawOverlay();
+      setMsg('Deleted: ' + delPin.address);
+      return;
+    }
+    // Check arrow
+    const delArr = arrowAtXY(cx, cy);
+    if (delArr) {
+      arrows = arrows.filter(a => a.id !== delArr.id);
+      saveArrows(); drawOverlay();
+      setMsg('Arrow deleted.');
+      return;
+    }
+    // Check rectifier
+    if (rectAtXY(cx, cy)) {
+      if (confirm('Delete the rectifier marker?')) {
+        rectifier = null;
+        saveRectifier(); drawOverlay(); updateRectStatus();
+        setMsg('Rectifier removed.');
+      }
+      return;
+    }
+    setMsg('Click a diamond, arrow, or rectifier to delete it. Right-click also works.');
+    return;
+  }
 
   // ── PLACED PINS always show detail in any mode ─────────────────────────────
   const pin = pinAtXY(cx, cy);
@@ -1349,7 +1405,8 @@ overlayCanvas.addEventListener('click', e => {
   if (arr) {
     arr.dir = (arr.dir + 1) % 4;
     saveArrows(); drawOverlay();
-    setMsg('Arrow rotated: ' + ['→ Right','↓ Down','← Left','↑ Up'][arr.dir]);
+    const dirs = ['→ Right','↓ Down','← Left','↑ Up'];
+    setMsg('Arrow now pointing ' + dirs[arr.dir] + '. Click again to continue rotating.');
     return;
   }
 
@@ -1365,7 +1422,7 @@ overlayCanvas.addEventListener('click', e => {
     if (!pdfDoc) { setMsg('Upload a PDF map first.'); return; }
     arrows.push({ id: Date.now(), x: cx / scale, y: cy / scale, dir: 0 });
     saveArrows(); drawOverlay();
-    setMsg('Arrow placed — click to rotate 90°. Drag to reposition.');
+    setMsg('Arrow dropped pointing → Right. Click it again to rotate 90°. Each click rotates: → ↓ ← ↑');
     return;
   }
 
