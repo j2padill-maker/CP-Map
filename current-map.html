@@ -986,6 +986,7 @@ function focusPin(feId) {
   const pin = pins.find(p => p.feId == feId);
   if (!pin) return;
   if (!pin.placed) {
+    // Unplaced — select for placement, no popup
     selectedFeId     = feId;
     pendingPlacement = feId;
     setMode('place');
@@ -993,12 +994,11 @@ function focusPin(feId) {
     setMsg('Selected: ' + pin.address + ' — click the map to place it.');
     return;
   }
-  // Placed — show detail popup positioned to the right of the sidebar
+  // Placed — just flash to show location on map, no popup
+  // Detail popup is accessed by clicking the diamond directly on the map
   selectedFeId = null;
   flashPin(pin);
-  // Fake a click event positioned just right of the sidebar (270px wide)
-  const fakeE = { clientX: 280, clientY: Math.round(window.innerHeight / 2) };
-  showDetail(pin, fakeE);
+  setMsg('📍 ' + pin.address + ' — click the diamond on the map for options.');
 }
 
 function deletePin(feId, e) {
