@@ -798,7 +798,14 @@ function arrowAtXY(cx, cy) {
 function placeNextUnplaced(x, y) {
   // Find first unplaced pin
   const unplaced = pins.filter(p => !p.placed);
-  if (!unplaced.length) { setMsg('All pins are placed. Load more field entries or switch to Drag mode.'); return; }
+  if (!unplaced.length) {
+    if (!pins.length) {
+      setMsg('No field entries loaded yet. Click "↻ Load Field Entries" in the sidebar first.');
+    } else {
+      setMsg('All entries are already placed on the map. Use Drag mode to reposition them.');
+    }
+    return;
+  }
 
   // If a specific pin is pending (from sidebar click), place that one
   let target = pendingPlacement ? pins.find(p => p.feId === pendingPlacement) : unplaced[0];
@@ -1212,7 +1219,7 @@ overlayCanvas.addEventListener('click', e => {
   }
 
   if (mode === 'arrow') {
-    if (!pdfPage) { setMsg('Upload a PDF map first.'); return; }
+    if (!pdfDoc) { setMsg('Upload a PDF map first.'); return; }
     // Click existing arrow to rotate it
     const arr = arrowAtXY(cx, cy);
     if (arr) {
@@ -1230,7 +1237,7 @@ overlayCanvas.addEventListener('click', e => {
   }
 
   if (mode === 'rect') {
-    if (!pdfPage) { setMsg('Upload a PDF map first.'); return; }
+    if (!pdfDoc) { setMsg('Upload a PDF map first.'); return; }
     const x = cx / scale, y = cy / scale;
     if (!rectifier) rectifier = { x, y, station: '', amps: null, volts: null, minAmps: null, maxAmps: null, minVolts: null, maxVolts: null };
     else { rectifier.x = x; rectifier.y = y; }
@@ -1240,8 +1247,9 @@ overlayCanvas.addEventListener('click', e => {
   }
 
   if (mode === 'place') {
-    if (!pdfPage) { setMsg('Upload a PDF map first.'); return; }
-    // Check if clicked existing pin
+    if (!pdfDoc) { setMsg('Upload a PDF map first — or wait for it to finish loading.'); return; }
+    if (!scale || scale <= 0) { setMsg('Map is still rendering — please wait a moment.'); return; }
+    // Check if clicked existing placed pin
     const pin = pinAtXY(cx, cy);
     if (pin) { showDetail(pin, e); return; }
     placeNextUnplaced(cx / scale, cy / scale);
