@@ -1392,7 +1392,6 @@ overlayCanvas.addEventListener('contextmenu', e => {
 
 overlayCanvas.addEventListener('click', e => {
   if (wasJustDragging) return;
-  closeCtxMenu();
   const canvRect = overlayCanvas.getBoundingClientRect();
   const cx = e.clientX - canvRect.left, cy = e.clientY - canvRect.top;
 
@@ -1439,6 +1438,7 @@ overlayCanvas.addEventListener('click', e => {
   }
 
   // ── EMPTY MAP CLICK — mode-specific ───────────────────────────────────────
+  closeCtxMenu(); // safe to close here — no item was clicked
   if (mode === 'place') {
     if (!pdfDoc)              { setMsg('Upload a PDF map first.'); return; }
     if (!scale || scale <= 0) { setMsg('Map is still rendering — please wait.'); return; }
@@ -1617,26 +1617,28 @@ function closeCtxMenu() {
 }
 
 function ctxAction(action) {
+  // Save target before closeCtxMenu clears it
+  const target = ctxTarget;
   closeCtxMenu();
-  if (!ctxTarget && !['rect-info','rect-edit','rect-delete'].includes(action)) return;
+  if (!target && !['rect-info','rect-edit','rect-delete'].includes(action)) return;
 
-  if (action === 'dir-up')    { ctxTarget.dir = 3; saveArrows(); drawOverlay(); setMsg('Arrow facing ↑ Up.'); return; }
-  if (action === 'dir-down')  { ctxTarget.dir = 1; saveArrows(); drawOverlay(); setMsg('Arrow facing ↓ Down.'); return; }
-  if (action === 'dir-left')  { ctxTarget.dir = 2; saveArrows(); drawOverlay(); setMsg('Arrow facing ← Left.'); return; }
-  if (action === 'dir-right') { ctxTarget.dir = 0; saveArrows(); drawOverlay(); setMsg('Arrow facing → Right.'); return; }
+  if (action === 'dir-up')    { target.dir = 3; saveArrows(); drawOverlay(); setMsg('Arrow facing ↑ Up.'); return; }
+  if (action === 'dir-down')  { target.dir = 1; saveArrows(); drawOverlay(); setMsg('Arrow facing ↓ Down.'); return; }
+  if (action === 'dir-left')  { target.dir = 2; saveArrows(); drawOverlay(); setMsg('Arrow facing ← Left.'); return; }
+  if (action === 'dir-right') { target.dir = 0; saveArrows(); drawOverlay(); setMsg('Arrow facing → Right.'); return; }
   if (action === 'arrow-delete') {
-    arrows = arrows.filter(a => a.id !== ctxTarget.id);
+    arrows = arrows.filter(a => a.id !== target.id);
     saveArrows(); drawOverlay(); setMsg('Arrow deleted.'); return;
   }
-  if (action === 'pin-detail')  { showDetail(ctxTarget, null); return; }
+  if (action === 'pin-detail')  { showDetail(target, null); return; }
   if (action === 'pin-unplace') {
-    ctxTarget.placed = false; ctxTarget.x = 0; ctxTarget.y = 0;
+    target.placed = false; target.x = 0; target.y = 0;
     savePins(); renderSidebar(); drawOverlay();
-    setMsg('Pin unplaced — ' + ctxTarget.address + '. Select from sidebar to reposition.'); return;
+    setMsg('Pin unplaced — ' + target.address + '. Select from sidebar to reposition.'); return;
   }
   if (action === 'pin-delete') {
-    const addr = ctxTarget.address;
-    pins = pins.filter(p => p.feId !== ctxTarget.feId);
+    const addr = target.address;
+    pins = pins.filter(p => p.feId !== target.feId);
     savePins(); renderSidebar(); drawOverlay(); setMsg('Deleted: ' + addr); return;
   }
   if (action === 'rect-info')   { showRectDetail(null); return; }
@@ -1647,10 +1649,12 @@ function ctxAction(action) {
   }
 }
 
-// Close menu on outside click
-document.addEventListener('click', e => {
+// Close menu when clicking outside it — use mousedown so it fires before onclick
+document.addEventListener('mousedown', e => {
   const menu = document.getElementById('ctx-menu');
-  if (menu && menu.classList.contains('open') && !menu.contains(e.target)) closeCtxMenu();
+  if (menu && menu.classList.contains('open') && !menu.contains(e.target)) {
+    closeCtxMenu();
+  }
 });
 
 function toggleLegend() {
