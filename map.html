@@ -194,7 +194,6 @@
   </div>
   <div class="nav-map-btns">
     <button class="mode-btn active" id="btn-place" onclick="setMode('place')">📍 Place Pins</button>
-    <button class="mode-btn" id="btn-drag" onclick="setMode('drag')" title="Drag pins to reposition">✥ Drag Pins</button>
     <button class="mode-btn rect-mode" id="btn-rect" onclick="setMode('rect')" title="Place rectifier marker">⚡ Rectifier</button>
     <button class="mode-btn" id="btn-view" onclick="setMode('view')">👁 View Only</button>
     <button class="mode-btn" onclick="exportPins()" title="Save pins to file">💾 Export Pins</button>
@@ -414,13 +413,12 @@ function loadRectifier() {
 function setMode(m) {
   mode = m;
   document.getElementById('btn-place').classList.toggle('active', m === 'place');
-  document.getElementById('btn-drag').classList.toggle('active',  m === 'drag');
   document.getElementById('btn-view').classList.toggle('active',  m === 'view');
   document.getElementById('btn-rect').classList.toggle('active',  m === 'rect');
-  overlayCanvas.style.cursor = (m === 'place' || m === 'rect') ? 'crosshair' : m === 'drag' ? 'grab' : 'default';
+  overlayCanvas.style.cursor = (m === 'place' || m === 'rect') ? 'crosshair' : 'default';
   mapCanvas.style.cursor     = overlayCanvas.style.cursor;
   document.getElementById('status-mode').textContent =
-    m === 'place' ? 'PLACE PINS' : m === 'drag' ? 'DRAG PINS' : m === 'rect' ? 'PLACE RECTIFIER' : 'VIEW ONLY';
+    m === 'place' ? 'PLACE PINS' : m === 'rect' ? 'PLACE RECTIFIER' : 'VIEW ONLY';
 }
 
 async function loadPDF(input) {
@@ -977,12 +975,11 @@ const tooltip = document.getElementById('map-tooltip');
 let wasJustDragging = false;  // survives mouseup→click sequence
 
 overlayCanvas.addEventListener('mousedown', (e) => {
-  if (mode !== 'drag') return;
   const rect = overlayCanvas.getBoundingClientRect();
   const cx = e.clientX - rect.left;
   const cy = e.clientY - rect.top;
 
-  // Try pin first
+  // Dragging works in ANY mode
   const pin = pinAtXY(cx, cy);
   if (pin) {
     dragPin    = pin;
@@ -994,7 +991,7 @@ overlayCanvas.addEventListener('mousedown', (e) => {
     return;
   }
 
-  // Try rectifier marker
+  // Rectifier drag works in any mode too
   if (rectifier) {
     const dx = rectifier.x * scale - cx;
     const dy = rectifier.y * scale - cy;
@@ -1005,7 +1002,6 @@ overlayCanvas.addEventListener('mousedown', (e) => {
       dragOffX   = cx - rectifier.x * scale;
       dragOffY   = cy - rectifier.y * scale;
       overlayCanvas.style.cursor = 'grabbing';
-      // Flag that we're dragging the rectifier, not a pin
       overlayCanvas.dataset.draggingRect = '1';
       e.preventDefault();
     }
@@ -1053,7 +1049,7 @@ document.addEventListener('mouseup', (e) => {
   }
   dragPin    = null;
   isDragging = false;
-  overlayCanvas.style.cursor = mode === 'drag' ? 'grab' : mode === 'place' ? 'crosshair' : 'default';
+  overlayCanvas.style.cursor = mode === 'place' ? 'crosshair' : mode === 'rect' ? 'crosshair' : 'default';
 });
 
 overlayCanvas.addEventListener('mousemove', (e) => {
@@ -1062,8 +1058,8 @@ overlayCanvas.addEventListener('mousemove', (e) => {
   const cx   = e.clientX - rect.left;
   const cy   = e.clientY - rect.top;
 
-  // Show grab cursor over rectifier in drag mode
-  if (mode === 'drag' && rectifier) {
+  // Always show grab cursor over rectifier
+  if (rectifier) {
     const dx = rectifier.x * scale - cx;
     const dy = rectifier.y * scale - cy;
     const r  = Math.max(14, 16 * scale) * 1.6 + 8;
@@ -1076,7 +1072,7 @@ overlayCanvas.addEventListener('mousemove', (e) => {
 
   const pin = pinAtXY(cx, cy);
   if (pin) {
-    overlayCanvas.style.cursor = mode === 'drag' ? 'grab' : 'pointer';
+    overlayCanvas.style.cursor = 'grab'; // grab on pins in all modes
     document.getElementById('tt-name').textContent = pin.tpNum + ' — ' + pin.address;
     document.getElementById('tt-reads').innerHTML = pin.offRead !== null
       ? 'Off: ' + pin.offRead.toFixed(3) + 'V | On: ' + pin.onRead.toFixed(3) + 'V | Δ' + pin.diff + 'mV'
@@ -1085,7 +1081,7 @@ overlayCanvas.addEventListener('mousemove', (e) => {
     tooltip.style.left = (e.clientX + 14) + 'px';
     tooltip.style.top  = (e.clientY - 10) + 'px';
   } else {
-    overlayCanvas.style.cursor = mode === 'place' ? 'crosshair' : mode === 'drag' ? 'grab' : mode === 'rect' ? 'crosshair' : 'default';
+    overlayCanvas.style.cursor = mode === 'place' ? 'crosshair' : mode === 'rect' ? 'crosshair' : 'default';
     tooltip.style.display = 'none';
   }
 });
@@ -1101,8 +1097,7 @@ overlayCanvas.addEventListener('click', (e) => {
   const cx   = e.clientX - rect.left;  // logical CSS pixels
   const cy   = e.clientY - rect.top;
   const pin  = pinAtXY(cx, cy);
-  // In drag mode, don't open detail popup on click
-  if (mode === 'drag') return;
+  // Detail popup fires in ANY mode when clicking a pin
   if (pin) {
     showDetail(pin, e);
     return;
