@@ -139,10 +139,15 @@
   .detail-popup .dp-reason.none   { border-color: #888; background: rgba(128,128,128,0.1); color: var(--text-dim); }
 
   /* RED ALERT PANEL */
-  .alert-panel { border-top: 2px solid var(--red-solid); background: var(--surface); flex-shrink: 0; height: 180px; display: none; flex-direction: column; }
-  .alert-panel-header { padding: 6px 12px; background: rgba(240,64,64,0.15); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .alert-panel { border-top: 2px solid var(--red-solid); background: var(--surface); flex-shrink: 0; display: none; flex-direction: column; }
+  .alert-panel.expanded { max-height: 180px; }
+  .alert-panel.collapsed { max-height: 38px; overflow: hidden; }
+  .alert-panel-header { padding: 6px 12px; background: rgba(240,64,64,0.15); display: flex; align-items: center; gap: 8px; flex-shrink: 0; cursor: pointer; user-select: none; }
+  .alert-panel-header:hover { background: rgba(240,64,64,0.22); }
   .alert-panel-header h3 { font-size: 10px; letter-spacing: 2px; color: var(--red-solid); text-transform: uppercase; font-weight: bold; flex: 1; }
   .alert-count { background: var(--red-solid); color: #fff; font-size: 10px; font-weight: bold; padding: 1px 7px; border-radius: 10px; }
+  .alert-toggle { color: var(--red-solid); font-size: 11px; transition: transform .2s; }
+  .alert-toggle.collapsed { transform: rotate(180deg); }
   .alert-list { overflow-y: auto; padding: 4px 6px; flex: 1; }
   .alert-item { padding: 5px 8px; margin-bottom: 3px; background: rgba(240,64,64,0.1); border: 1px solid rgba(240,64,64,0.3); font-size: 10px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all .15s; }
   .alert-item:hover { background: rgba(240,64,64,0.2); border-color: var(--red-solid); }
@@ -251,10 +256,11 @@
     <div class="tp-list" id="tp-list">
       <div style="padding:12px;font-size:10px;color:var(--text-muted);text-align:center">No pins placed yet</div>
     </div>
-  <div class="alert-panel" id="alert-panel">
-    <div class="alert-panel-header">
+  <div class="alert-panel collapsed" id="alert-panel">
+    <div class="alert-panel-header" onclick="toggleAlertPanel()">
       <h3>&#9888; Critical Areas</h3>
       <span class="alert-count" id="alert-count">0</span>
+      <span class="alert-toggle collapsed" id="alert-toggle">▲</span>
     </div>
     <div class="alert-list" id="alert-list"></div>
   </div>
@@ -912,7 +918,7 @@ function renderSidebar() {
       </div>
       <button class="tp-delete" onclick="openEditModal(${pin.id},event)" title="Edit" style="color:var(--teal-dim);font-size:13px">✏</button>
       <button class="tp-delete" onclick="deletePin(${pin.id},event)" title="Remove">×</button>`;
-    div.addEventListener('click', () => flashPin(pin));
+    div.addEventListener('click', () => { flashPin(pin); showDetail(pin, null); });
     list.appendChild(div);
   }
   renderAlertPanel();
@@ -924,7 +930,7 @@ function renderAlertPanel() {
   const list     = document.getElementById('alert-list');
   const countEl  = document.getElementById('alert-count');
   const redPins  = pins.filter(p => p.color === 'red')
-                       .sort((a,b) => (b.offRead||0) - (a.offRead||0)); // worst first (most positive = lowest protection)
+                       .sort((a,b) => (b.offRead||0) - (a.offRead||0));
   if (!redPins.length) { panel.style.display = 'none'; return; }
   panel.style.display = 'flex';
   countEl.textContent = redPins.length;
@@ -939,6 +945,15 @@ function renderAlertPanel() {
     div.addEventListener('click', () => { flashPin(pin); showDetail(pin, null); });
     list.appendChild(div);
   }
+}
+
+function toggleAlertPanel() {
+  const panel  = document.getElementById('alert-panel');
+  const toggle = document.getElementById('alert-toggle');
+  const isCollapsed = panel.classList.contains('collapsed');
+  panel.classList.toggle('collapsed',  !isCollapsed);
+  panel.classList.toggle('expanded',    isCollapsed);
+  toggle.classList.toggle('collapsed', !isCollapsed);
 }
 
 function deletePin(id, e) {
@@ -961,11 +976,11 @@ function flashPin(pin) {
 
 // ── PIN HIT TEST ──────────────────────────────────────────────────────────────
 function pinAtXY(cx, cy) {
-  // cx/cy are in CSS logical pixels
+  // cx/cy are in CSS logical pixels relative to canvas top-left
   for (const pin of pins) {
     const dx = pin.x * scale - cx;
     const dy = pin.y * scale - cy;
-    if (Math.sqrt(dx*dx + dy*dy) <= CIRCLE_R * scale + 8) return pin;
+    if (Math.sqrt(dx*dx + dy*dy) <= CIRCLE_R * scale + 10) return pin;
   }
   return null;
 }
@@ -1092,11 +1107,11 @@ overlayCanvas.addEventListener('mouseleave', () => {
 
 // ── CLICK: place pin OR show detail ──────────────────────────────────────────
 overlayCanvas.addEventListener('click', (e) => {
-  if (wasJustDragging) return;  // suppress click after drag release
-  const rect = overlayCanvas.getBoundingClientRect();
-  const cx   = e.clientX - rect.left;  // logical CSS pixels
-  const cy   = e.clientY - rect.top;
-  const pin  = pinAtXY(cx, cy);
+  if (wasJustDragging) return;
+  const canvasRect = overlayCanvas.getBoundingClientRect();
+  const cx = e.clientX - canvasRect.left;
+  const cy = e.clientY - canvasRect.top;
+  const pin = pinAtXY(cx, cy);
   // Detail popup fires in ANY mode when clicking a pin
   if (pin) {
     showDetail(pin, e);
