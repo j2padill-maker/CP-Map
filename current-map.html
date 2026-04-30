@@ -67,9 +67,15 @@
   .apply-btn.secondary { background: var(--panel); border-color: var(--border); color: var(--text-dim); }
   .apply-btn.secondary:hover { border-color: var(--teal); color: var(--teal); background: var(--panel-light); }
 
-  .instructions { padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--panel); }
-  .instructions p { font-size: 10px; color: var(--text-dim); line-height: 1.7; }
-  .instructions strong { color: var(--teal); }
+  .instructions { border-bottom: 1px solid var(--border); background: var(--panel); }
+  .instructions-toggle { padding: 8px 12px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none; }
+  .instructions-toggle:hover { background: var(--panel-light); }
+  .instructions-toggle span { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-muted); font-weight: bold; }
+  .instructions-toggle .instr-arrow { color: var(--text-muted); font-size: 10px; transition: transform .2s; }
+  .instructions-toggle .instr-arrow.open { transform: rotate(180deg); }
+  .instructions-body { padding: 6px 12px 10px; }
+  .instructions-body p { font-size: 10px; color: var(--text-dim); line-height: 1.8; }
+  .instructions-body strong { color: var(--teal); }
 
   /* PIN LIST */
   .pin-header { padding: 7px 12px; font-size: 10px; color: var(--text-dim); border-bottom: 1px solid var(--border); background: var(--panel); letter-spacing: 1px; text-transform: uppercase; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
@@ -202,17 +208,23 @@
       <button class="apply-btn secondary" style="margin-top:4px" onclick="window.location.href='field-entry.html'">→ Go to Field Entry</button>
     </div>
 
-    <!-- Instructions -->
+    <!-- Instructions (collapsible, open by default) -->
     <div class="instructions">
-      <p>
-        <strong>1.</strong> Upload your station PDF map.<br>
-        <strong>2.</strong> Click Load Field Entries to pull in drop checks and bond checks.<br>
-        <strong>3.</strong> Switch to <strong>Place</strong> mode and click the map to position each diamond pin.<br>
-        <strong>4.</strong> Switch to <strong>Drag</strong> mode to reposition pins.<br>
-        <strong>5.</strong> Hover a pin for quick info. Click for full detail.<br>
-        <strong>6.</strong> Use <strong>Rectifier</strong> mode to place the ⚡ marker.<br>
-        <strong>7.</strong> Use <strong>Arrow</strong> mode to drop flow arrows. Click an arrow to rotate it 90°.
-      </p>
+      <div class="instructions-toggle" onclick="toggleInstructions()">
+        <span>📋 How to Use</span>
+        <span class="instr-arrow open" id="instr-arrow">▲</span>
+      </div>
+      <div class="instructions-body" id="instr-body">
+        <p>
+          <strong>1.</strong> Upload your station PDF map.<br>
+          <strong>2.</strong> Click Load Field Entries to pull in drop checks and bond checks.<br>
+          <strong>3.</strong> Switch to <strong>Place</strong> mode and click the map to position each diamond pin.<br>
+          <strong>4.</strong> Switch to <strong>Drag</strong> mode to reposition pins.<br>
+          <strong>5.</strong> Hover a pin for quick info. Click for full detail.<br>
+          <strong>6.</strong> Use <strong>Rectifier</strong> mode to place the ⚡ marker.<br>
+          <strong>7.</strong> Use <strong>Arrow</strong> mode to drop flow arrows. Click to rotate 90°.
+        </p>
+      </div>
     </div>
 
     <!-- Pin List -->
@@ -929,7 +941,7 @@ function renderSidebar() {
       <div class="pin-diamond" style="background:${c.fill};border-color:${c.stroke};${pin.isEstimate && pin.color !== 'open' ? 'border-style:dashed' : ''}"></div>
       <div class="pin-info">
         <div class="pin-name">${typeLabel} ${pin.address}</div>
-        <div class="pin-meta">${pin.amps.toFixed(3)}A — <span style="color:${c.stroke}">${pin.label}</span>${placedLabel}</div>
+        <div class="pin-meta">${parseFloat(pin.amps).toFixed(3)}A — <span style="color:${c.stroke}">${pin.label}</span>${placedLabel}</div>
       </div>
       <button class="pin-del" onclick="deletePin('${pin.feId}',event)" title="Remove">×</button>
     </div>`;
@@ -940,18 +952,19 @@ function focusPin(feId) {
   const pin = pins.find(p => p.feId == feId);
   if (!pin) return;
   if (!pin.placed) {
-    // Select this pin — next map click places it specifically
-    selectedFeId = feId;
+    selectedFeId     = feId;
     pendingPlacement = feId;
     setMode('place');
-    renderSidebar(); // re-render to show highlight
-    setMsg('Selected: ' + pin.address + ' — now click the map location to place it.');
+    renderSidebar();
+    setMsg('Selected: ' + pin.address + ' — click the map to place it.');
     return;
   }
-  // Already placed — flash and show detail
+  // Placed — show detail popup positioned to the right of the sidebar
   selectedFeId = null;
   flashPin(pin);
-  showDetail(pin, null);
+  // Fake a click event positioned just right of the sidebar (270px wide)
+  const fakeE = { clientX: 280, clientY: Math.round(window.innerHeight / 2) };
+  showDetail(pin, fakeE);
 }
 
 function deletePin(feId, e) {
@@ -1482,6 +1495,14 @@ async function clearMap() {
 function toggleLegend() {
   const l = document.getElementById('legend-float');
   l.style.display = l.style.display === 'none' ? 'block' : 'none';
+}
+
+function toggleInstructions() {
+  const body  = document.getElementById('instr-body');
+  const arrow = document.getElementById('instr-arrow');
+  const open  = body.style.display !== 'none';
+  body.style.display = open ? 'none' : '';
+  arrow.classList.toggle('open', !open);
 }
 
 function setMsg(msg) {
