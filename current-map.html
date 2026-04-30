@@ -220,6 +220,9 @@
       <span>CURRENT CHECKS</span>
       <span id="pin-count" style="color:var(--teal)">0</span>
     </div>
+    <div id="pin-status" style="padding:6px 12px;font-size:9px;color:var(--text-muted);letter-spacing:1px;border-bottom:1px solid var(--border);background:var(--panel)">
+      Load field entries to begin
+    </div>
     <div class="pin-list" id="pin-list"></div>
 
   </div>
@@ -344,7 +347,7 @@ const STORAGE_ARROWS = 'cm_arrows';
 const STORAGE_PDF    = 'cm_pdf_name';
 const KEY_FE         = 'fe_results';
 const KEY_FE_RECT    = 'fe_rectifier';
-const DIAMOND_R      = 14;
+const DIAMOND_R      = 28;
 const ARROW_LEN      = 28;
 
 // ── INDEXEDDB — raw ArrayBuffer, same pattern as map.html ─────────────────────
@@ -412,6 +415,7 @@ let dragPin       = null;
 let dragOffX = 0, dragOffY = 0;
 let wasJustDragging = false;
 let pendingPlacement = null; // fe_result entry waiting to be placed
+let selectedFeId     = null; // sidebar-selected pin waiting to be placed
 
 const mapCanvas     = document.getElementById('map-canvas');
 const overlayCanvas = document.getElementById('overlay-canvas');
@@ -435,28 +439,30 @@ function saveArrows()    { try { localStorage.setItem(STORAGE_ARROWS, JSON.strin
 function loadFieldEntries() {
   let entries = [];
   try { entries = JSON.parse(localStorage.getItem(KEY_FE) || '[]'); } catch(e) {}
-  if (!entries.length) { setMsg('No field entries found. Go to Field Entry and add drop checks or bond checks first.'); return; }
 
-  // Load rectifier from field entry if we don't have one set
+  if (!entries.length) {
+    setMsg('No field entries found — go to Field Entry and save some drop checks or bond checks first.');
+    updatePinStatus();
+    return;
+  }
+
   if (!rectifier) {
     try {
       const feRect = JSON.parse(localStorage.getItem(KEY_FE_RECT) || 'null');
       if (feRect && feRect.amps) {
         rectifier = { x: 50, y: 50, station: feRect.station || '—', amps: feRect.amps, volts: feRect.volts || null, minAmps: null, maxAmps: null, minVolts: null, maxVolts: null };
-        saveRectifier();
-        updateRectStatus();
+        saveRectifier(); updateRectStatus();
       }
     } catch(e) {}
   }
 
   let added = 0, skipped = 0;
   for (const entry of entries) {
-    // Check if already loaded (by id)
     if (pins.find(p => p.feId === entry.id)) { skipped++; continue; }
     const pin = {
       id:        Date.now() + Math.random(),
       feId:      entry.id,
-      type:      entry.type,        // 'drop' or 'bond'
+      type:      entry.type,
       address:   entry.address,
       amps:      entry.amps,
       ratio:     parseFloat(entry.ratio) || null,
@@ -469,22 +475,41 @@ function loadFieldEntries() {
       proximity: entry.proximity || '—',
       notes:     entry.notes || '',
       date:      entry.date || '',
-      isEstimate:!entry.formula || entry.expected?.includes('est.'),
+      isEstimate: !entry.formula || (entry.expected && entry.expected.includes('est.')),
       isOpen:    entry.amps === 0,
       placed:    false,
       x: 0, y: 0
     };
-    // Open bond override
     if (pin.isOpen) { pin.color = 'open'; pin.label = 'OPEN BOND'; }
     pins.push(pin);
     added++;
   }
 
-  savePins();
-  renderSidebar();
-  drawOverlay();
-  setMsg(`Loaded ${added} new entr${added !== 1 ? 'ies' : 'y'} from Field Entry.${skipped ? ' ' + skipped + ' already on map.' : ''} Switch to Place mode to position pins.`);
-  if (pdfPage && added > 0) setMode('place');
+  savePins(); renderSidebar(); drawOverlay(); updatePinStatus();
+
+  const unplaced = pins.filter(p => !p.placed).length;
+  if (added > 0) {
+    setMsg(`✓ ${added} entr${added !== 1 ? 'ies' : 'y'} loaded — ${unplaced} unplaced. Switch to ◇ Place mode then click the map to position them.`);
+    if (pdfDoc) setMode('place');
+  } else {
+    setMsg(`All ${skipped} entr${skipped !== 1 ? 'ies' : 'y'} already on map. ${unplaced} still unplaced.`);
+  }
+}
+
+function updatePinStatus() {
+  const el = document.getElementById('pin-status');
+  if (!el) return;
+  const total    = pins.length;
+  const placed   = pins.filter(p => p.placed).length;
+  const unplaced = total - placed;
+  if (!total) {
+    el.textContent = 'No entries loaded yet';
+    el.style.color = 'var(--text-muted)';
+  } else if (unplaced > 0) {
+    el.innerHTML = `<span style="color:var(--orange)">${unplaced} unplaced</span> · ${placed} placed · ${total} total`;
+  } else {
+    el.innerHTML = `<span style="color:var(--green)">✓ All ${total} placed</span>`;
+  }
 }
 
 // ── PDF LOADING ───────────────────────────────────────────────────────────────
@@ -561,6 +586,8 @@ function setMode(m) {
   ['drag','place','rect','arrow'].forEach(id => {
     document.getElementById('btn-' + id).classList.toggle('active', id === m);
   });
+  // Clear selection when leaving place mode
+  if (m !== 'place') { selectedFeId = null; pendingPlacement = null; renderSidebar(); }
   overlayCanvas.style.cursor = m === 'drag' ? 'grab' : 'crosshair';
   document.getElementById('sb-mode').textContent = m.toUpperCase();
 }
@@ -796,33 +823,73 @@ function arrowAtXY(cx, cy) {
 
 // ── PLACE PIN ─────────────────────────────────────────────────────────────────
 function placeNextUnplaced(x, y) {
-  // Find first unplaced pin
   const unplaced = pins.filter(p => !p.placed);
   if (!unplaced.length) {
     if (!pins.length) {
       setMsg('No field entries loaded yet. Click "↻ Load Field Entries" in the sidebar first.');
     } else {
-      setMsg('All entries are already placed on the map. Use Drag mode to reposition them.');
+      setMsg('All entries are already placed. Use Drag mode to reposition them.');
     }
     return;
   }
 
-  // If a specific pin is pending (from sidebar click), place that one
-  let target = pendingPlacement ? pins.find(p => p.feId === pendingPlacement) : unplaced[0];
+  // Use selected/pending pin if set, otherwise first unplaced
+  let target = (selectedFeId || pendingPlacement)
+    ? pins.find(p => p.feId == (selectedFeId || pendingPlacement))
+    : null;
   if (!target) target = unplaced[0];
 
   target.placed = true;
   target.x = x;
   target.y = y;
+  selectedFeId     = null;
   pendingPlacement = null;
 
-  savePins();
-  renderSidebar();
-  drawOverlay();
+  savePins(); renderSidebar(); drawOverlay();
 
   const remaining = pins.filter(p => !p.placed).length;
-  setMsg(`Placed: ${target.address} (${target.amps.toFixed(3)}A). ${remaining} remaining.`);
+  setMsg(`Placed: ${target.address} (${target.amps.toFixed(3)}A). ${remaining} still unplaced.`);
 }
+
+// ── DRAG FROM SIDEBAR ONTO MAP ────────────────────────────────────────────────
+let draggingFeId = null;
+
+function startSidebarDrag(e, feId) {
+  const pin = pins.find(p => p.feId == feId);
+  if (!pin) { e.preventDefault(); return; }
+  draggingFeId = feId;
+  selectedFeId = feId;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', String(feId));
+  renderSidebar();
+}
+
+const mapArea = document.getElementById('map-area');
+mapArea.addEventListener('dragover', e => {
+  if (!draggingFeId) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+});
+
+mapArea.addEventListener('drop', e => {
+  e.preventDefault();
+  if (!draggingFeId || !pdfDoc) { draggingFeId = null; return; }
+  const areaRect = mapArea.getBoundingClientRect();
+  const cx = e.clientX - areaRect.left + mapArea.scrollLeft;
+  const cy = e.clientY - areaRect.top  + mapArea.scrollTop;
+  const pin = pins.find(p => p.feId == draggingFeId);
+  if (pin) {
+    pin.placed = true;
+    pin.x = cx / scale;
+    pin.y = cy / scale;
+    selectedFeId     = null;
+    pendingPlacement = null;
+    savePins(); renderSidebar(); drawOverlay();
+    const remaining = pins.filter(p => !p.placed).length;
+    setMsg(`Placed: ${pin.address} (${pin.amps.toFixed(3)}A). ${remaining} still unplaced.`);
+  }
+  draggingFeId = null;
+});
 
 // ── SIDEBAR ───────────────────────────────────────────────────────────────────
 function renderSidebar() {
@@ -831,18 +898,32 @@ function renderSidebar() {
     list.innerHTML = '<div style="padding:12px;font-size:10px;color:var(--text-muted);text-align:center">No entries loaded.<br>Click Load Field Entries.</div>';
     document.getElementById('pin-count').textContent = 0;
     document.getElementById('sb-pins').textContent   = 0;
+    updatePinStatus();
     return;
   }
 
   document.getElementById('pin-count').textContent = pins.length;
+  updatePinStatus();
 
   list.innerHTML = pins.map(pin => {
     const c = COLORS[pin.color] || COLORS.none;
-    const typeLabel = pin.type === 'bond' ? '🔗' : '🔌';
+    const typeLabel  = pin.type === 'bond' ? '🔗' : '🔌';
     const statusClass = pin.placed ? '' : ' unplaced';
-    const placedLabel = pin.placed ? '' : '<span style="color:var(--orange);font-size:9px"> ◇ UNPLACED</span>';
+    const isSelected  = selectedFeId == pin.feId && !pin.placed;
+    const selectedStyle = isSelected
+      ? 'border-color:var(--teal);background:rgba(77,217,232,0.15);'
+      : '';
+    const placedLabel = pin.placed
+      ? ''
+      : isSelected
+        ? '<span style="color:var(--teal);font-size:9px"> ◇ CLICK MAP TO PLACE</span>'
+        : '<span style="color:var(--orange);font-size:9px"> ◇ UNPLACED</span>';
 
-    return `<div class="pin-item${statusClass}" onclick="focusPin('${pin.feId}')">
+    return `<div class="pin-item${statusClass}" style="${selectedStyle}"
+        onclick="focusPin('${pin.feId}')"
+        draggable="true"
+        ondragstart="startSidebarDrag(event,'${pin.feId}')"
+        title="${pin.placed ? 'Click to view detail' : 'Click to select, then click map to place — or drag directly onto map'}">
       <div class="pin-diamond" style="background:${c.fill};border-color:${c.stroke};${pin.isEstimate && pin.color !== 'open' ? 'border-style:dashed' : ''}"></div>
       <div class="pin-info">
         <div class="pin-name">${typeLabel} ${pin.address}</div>
@@ -857,12 +938,16 @@ function focusPin(feId) {
   const pin = pins.find(p => p.feId == feId);
   if (!pin) return;
   if (!pin.placed) {
-    // Mark as next to be placed
+    // Select this pin — next map click places it specifically
+    selectedFeId = feId;
     pendingPlacement = feId;
     setMode('place');
-    setMsg('Click on the map to place: ' + pin.address);
+    renderSidebar(); // re-render to show highlight
+    setMsg('Selected: ' + pin.address + ' — now click the map location to place it.');
     return;
   }
+  // Already placed — flash and show detail
+  selectedFeId = null;
   flashPin(pin);
   showDetail(pin, null);
 }
@@ -1389,6 +1474,7 @@ function setMsg(msg) {
 // ── INIT ──────────────────────────────────────────────────────────────────────
 loadState();
 renderSidebar();
+updatePinStatus();
 
 // Auto-reload cached PDF from IndexedDB on page load
 (async () => {
