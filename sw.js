@@ -1,7 +1,7 @@
 // CP Scout Service Worker
 // Caches all app pages and CDN assets for offline field use
 
-const CACHE_NAME = 'cp-scout-v2';
+const CACHE_NAME = 'cp-scout-v3';
 
 // All local pages to cache on install
 const STATIC_ASSETS = [
@@ -12,6 +12,7 @@ const STATIC_ASSETS = [
   '/trends.html',
   '/tools.html',
   '/library.html',
+  '/current-map.html',
   '/manifest.json',
   '/icons/icon-192.png',
   '/icons/icon-512.png'
@@ -87,13 +88,9 @@ self.addEventListener('fetch', event => {
         return response;
       })
       .catch(() => {
-        // Offline: serve from cache
         return caches.match(event.request).then(cached => {
           if (cached) return cached;
-          // Final fallback for navigation
-          if (event.request.mode === 'navigate') {
-            return caches.match('/index.html');
-          }
+          if (event.request.mode === 'navigate') return caches.match('/index.html');
         });
       })
   );
