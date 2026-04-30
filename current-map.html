@@ -27,7 +27,7 @@
     --red:         #f04040;
     --orange:      #f08020;
     --yellow:      #e8d020;
-    --green:       #30c860;
+    --green:       #0a7a30;
     --blue:        #4da6ff;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -240,7 +240,7 @@
       <div class="legend-item"><div class="legend-diamond" style="background:rgba(240,64,64,0.15);border-color:#f04040"></div> Critical (&gt;2.0×)</div>
       <div class="legend-item"><div class="legend-diamond" style="background:rgba(240,128,32,0.15);border-color:#f08020"></div> High Concern (1.5–2.0×)</div>
       <div class="legend-item"><div class="legend-diamond" style="background:rgba(232,208,32,0.15);border-color:#e8d020"></div> Elevated (1.1–1.5×)</div>
-      <div class="legend-item"><div class="legend-diamond" style="background:rgba(48,200,96,0.15);border-color:#30c860"></div> Normal (0.6–1.1×)</div>
+      <div class="legend-item"><div class="legend-diamond" style="background:rgba(48,200,96,0.15);border-color:#0a7a30"></div> Normal (0.6–1.1×)</div>
       <div class="legend-item"><div class="legend-diamond" style="background:rgba(77,166,255,0.15);border-color:#4da6ff"></div> Low (0.3–0.6×)</div>
       <div class="legend-item"><div class="legend-diamond" style="background:rgba(77,166,255,0.07);border-color:rgba(77,166,255,0.4)"></div> Critically Low (&lt;0.3×)</div>
       <div class="legend-item"><div class="legend-diamond" style="background:rgba(77,217,232,0.15);border-color:var(--teal);border-style:dashed"></div> Estimate (no history)</div>
@@ -388,7 +388,7 @@ const COLORS = {
   red:       { fill: 'rgba(240,64,64,0.15)',    stroke: '#f04040' },
   orange:    { fill: 'rgba(240,128,32,0.15)',   stroke: '#f08020' },
   yellow:    { fill: 'rgba(232,208,32,0.15)',   stroke: '#e8d020' },
-  green:     { fill: 'rgba(48,200,96,0.15)',    stroke: '#30c860' },
+  green:     { fill: 'rgba(48,200,96,0.15)',    stroke: '#0a7a30' },
   blue:      { fill: 'rgba(77,166,255,0.15)',   stroke: '#4da6ff' },
   'blue-dim':{ fill: 'rgba(77,166,255,0.07)',   stroke: 'rgba(77,166,255,0.4)' },
   open:      { fill: '#ffffff',                 stroke: '#000000' },
@@ -405,7 +405,7 @@ let pdfDoc    = null;
 let pdfPage   = null;
 let pageNum   = 1;
 let scale     = 1.0;
-let zoom      = 1.0;
+let zoom      = 0.5;
 let pins      = [];
 let arrows    = []; // { id, x, y, dir } dir: 0=right 1=down 2=left 3=up
 let rectifier = null;
