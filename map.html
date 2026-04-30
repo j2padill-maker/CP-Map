@@ -1004,7 +1004,7 @@ overlayCanvas.addEventListener('mousedown', (e) => {
     dragCandidate = pin; dragCandidateType = 'pin';
     dragOffX = cx - pin.x * scale; dragOffY = cy - pin.y * scale;
     dragStartX = cx; dragStartY = cy;
-    e.preventDefault(); return;
+    return;
   }
   if (rectifier) {
     const dx = rectifier.x * scale - cx;
@@ -1014,7 +1014,6 @@ overlayCanvas.addEventListener('mousedown', (e) => {
       dragCandidate = rectifier; dragCandidateType = 'rect';
       dragOffX = cx - rectifier.x * scale; dragOffY = cy - rectifier.y * scale;
       dragStartX = cx; dragStartY = cy;
-      e.preventDefault();
     }
   }
 });

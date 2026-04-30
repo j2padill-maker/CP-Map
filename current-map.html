@@ -1237,20 +1237,20 @@ overlayCanvas.addEventListener('mousedown', e => {
     dragCandidate = pin; dragCandidateType = 'pin';
     dragOffX = cx - pin.x * scale; dragOffY = cy - pin.y * scale;
     dragStartX = cx; dragStartY = cy;
-    e.preventDefault(); return;
+    return;
   }
   const arrow = arrowAtXY(cx, cy);
   if (arrow) {
     dragCandidate = arrow; dragCandidateType = 'arrow';
     dragOffX = cx - arrow.x * scale; dragOffY = cy - arrow.y * scale;
     dragStartX = cx; dragStartY = cy;
-    e.preventDefault(); return;
+    return;
   }
   if (rectAtXY(cx, cy)) {
     dragCandidate = rectifier; dragCandidateType = 'rect';
     dragOffX = cx - rectifier.x * scale; dragOffY = cy - rectifier.y * scale;
     dragStartX = cx; dragStartY = cy;
-    e.preventDefault(); return;
+    return;
   }
 });
 
