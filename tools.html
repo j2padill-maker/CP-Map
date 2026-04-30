@@ -204,28 +204,28 @@
       <h2>🔧 Tools</h2>
     </div>
     <div class="tool-list">
-      <div class="tool-item primary active" onclick="showTool('drop-check')">
+      <div class="tool-item primary active" onclick="showTool('drop-check', this)">
         <span class="tool-icon">⚡</span>
         <span class="tool-label">Drop Check</span>
       </div>
       <div class="tool-divider"></div>
-      <div class="tool-item" onclick="showTool('shunt')">
+      <div class="tool-item" onclick="showTool('shunt', this)">
         <span class="tool-icon">🔌</span>
         <span class="tool-label">Shunt Converter</span>
       </div>
-      <div class="tool-item" onclick="showTool('pipe')">
+      <div class="tool-item" onclick="showTool('pipe', this)">
         <span class="tool-icon">📐</span>
         <span class="tool-label">Pipe Constants</span>
       </div>
-      <div class="tool-item" onclick="showTool('galvanic')">
+      <div class="tool-item" onclick="showTool('galvanic', this)">
         <span class="tool-icon">⚗️</span>
         <span class="tool-label">Galvanic Series</span>
       </div>
-      <div class="tool-item" onclick="showTool('ohms')">
+      <div class="tool-item" onclick="showTool('ohms', this)">
         <span class="tool-icon">🔢</span>
         <span class="tool-label">Ohm's Law</span>
       </div>
-      <div class="tool-item" onclick="showTool('formulas')">
+      <div class="tool-item" onclick="showTool('formulas', this)">
         <span class="tool-icon">📏</span>
         <span class="tool-label">CP Formulas</span>
       </div>
@@ -832,11 +832,11 @@
 
 <script>
 // ── TOOL NAVIGATION ───────────────────────────────────────────────────────────
-function showTool(id) {
+function showTool(id, el) {
   document.querySelectorAll('.tool-section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.tool-item').forEach(i => i.classList.remove('active'));
   document.getElementById('tool-' + id).classList.add('active');
-  event.currentTarget.classList.add('active');
+  if (el) el.classList.add('active');
 }
 
 // ── RECTIFIER SYNC (reads from field-entry localStorage key) ──────────────────

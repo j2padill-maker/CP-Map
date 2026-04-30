@@ -28,29 +28,26 @@
     --red:      #f04040;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: 'Courier New', monospace; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  body { background: var(--bg); color: var(--text); font-family: 'Courier New', monospace; min-height: 100vh; display: flex; flex-direction: column; overflow-y: auto; }
 
   /* NAV BAR */
-  nav { background: var(--surface); border-bottom: 2px solid var(--teal-dark); display: flex; align-items: center; padding: 0 16px; flex-shrink: 0; height: 48px; }
-  .nav-brand { display: flex; align-items: center; gap: 10px; margin-right: 24px; }
-  .nav-brand .logo { font-size: 16px; font-weight: bold; color: var(--teal); letter-spacing: 2px; text-transform: uppercase; text-shadow: 0 0 10px rgba(77,217,232,0.4); white-space: nowrap; }
+  nav { background: var(--surface); border-bottom: 2px solid var(--teal-dark); display: flex; align-items: center; padding: 0 16px; flex-shrink: 0; height: 48px; position: sticky; top: 0; z-index: 50; }
+  .nav-brand { display: flex; align-items: center; gap: 10px; margin-right: 20px; text-decoration: none; }
+  .nav-brand .logo { font-size: 14px; font-weight: bold; color: var(--teal); letter-spacing: 2px; text-transform: uppercase; text-shadow: 0 0 10px rgba(77,217,232,0.4); white-space: nowrap; }
   .nav-brand .tagline { font-size: 9px; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; }
-  .nav-tabs { display: flex; gap: 2px; flex: 1; }
-  .nav-tab { padding: 0 18px; height: 48px; display: flex; align-items: center; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; color: var(--text-dim); border-bottom: 3px solid transparent; text-decoration: none; transition: all .15s; font-family: inherit; background: none; border-top: none; border-left: none; border-right: none; white-space: nowrap; }
+  .nav-tabs { display: flex; gap: 2px; flex: 1; overflow-x: auto; }
+  .nav-tabs::-webkit-scrollbar { display: none; }
+  .nav-tab { padding: 0 12px; height: 48px; display: flex; align-items: center; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; color: var(--text-dim); border-bottom: 3px solid transparent; text-decoration: none; transition: all .15s; font-family: inherit; background: none; border-top: none; border-left: none; border-right: none; white-space: nowrap; }
   .nav-tab:hover { color: var(--teal); background: rgba(77,217,232,0.05); }
   .nav-tab.active { color: var(--teal); border-bottom-color: var(--teal); background: rgba(77,217,232,0.08); font-weight: bold; }
-  .nav-tab .tab-icon { margin-right: 6px; }
-  .nav-station { margin-left: auto; font-size: 10px; color: var(--text-muted); letter-spacing: 1px; white-space: nowrap; }
+  .nav-station { margin-left: auto; font-size: 10px; color: var(--text-muted); letter-spacing: 1px; white-space: nowrap; padding-left: 12px; }
   .nav-station span { color: var(--teal); font-weight: bold; }
 
-  /* IFRAME CONTENT */
-  .content-frame { flex: 1; border: none; width: 100%; }
-
-  /* LANDING PAGE (shown when no tab selected) */
-  .landing { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; padding: 40px; }
+  /* LANDING PAGE */
+  .landing { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; padding: 40px 40px 60px; }
   .landing h2 { font-size: 22px; color: var(--teal); letter-spacing: 3px; text-transform: uppercase; text-shadow: 0 0 20px rgba(77,217,232,0.3); }
   .landing p { font-size: 12px; color: var(--text-dim); letter-spacing: 1px; text-align: center; max-width: 500px; line-height: 1.8; }
-  .landing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; max-width: 700px; width: 100%; margin-top: 8px; }
+  .landing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; max-width: 780px; width: 100%; margin-top: 8px; }
   .landing-card { background: var(--surface); border: 1px solid var(--border); padding: 20px; cursor: pointer; transition: all .2s; text-align: center; text-decoration: none; display: block; }
   .landing-card:hover { border-color: var(--teal); background: rgba(77,217,232,0.06); transform: translateY(-2px); }
   .landing-card .card-icon { font-size: 28px; margin-bottom: 10px; }
@@ -65,19 +62,20 @@
 <body>
 
 <nav>
-  <div class="nav-brand">
+  <a class="nav-brand" href="index.html">
     <div>
       <div class="logo">⚡ CP Scout</div>
       <div class="tagline">Cathodic Protection Field Analysis</div>
     </div>
-  </div>
+  </a>
   <div class="nav-tabs">
-    <a class="nav-tab" href="overview.html"><span class="tab-icon">📊</span>Overview</a>
-    <a class="nav-tab" href="map.html">📍 Read Potential Map</a>
+    <a class="nav-tab" href="overview.html">📊 Overview</a>
+    <a class="nav-tab" href="map.html">📍 Potentials</a>
     <a class="nav-tab" href="current-map.html">⚡ Current Map</a>
-    <a class="nav-tab coming" href="trends.html"><span class="tab-icon">📈</span>Trends</a>
-    <a class="nav-tab coming" href="field-entry.html"><span class="tab-icon">📋</span>Field Entry</a>
-    <a class="nav-tab coming" href="report.html"><span class="tab-icon">📄</span>Report</a>
+    <a class="nav-tab" href="trends.html">📈 Trends</a>
+    <a class="nav-tab" href="field-entry.html">📋 Field Entry</a>
+    <a class="nav-tab" href="tools.html">🔧 Tools</a>
+    <a class="nav-tab" href="library.html">📚 Library</a>
   </div>
   <div class="nav-station">Station: <span>409</span></div>
 </nav>
