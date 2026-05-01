@@ -186,9 +186,10 @@
   <div class="summary-row" id="summary-row" style="display:none">
     <div class="summary-card"><div class="sc-label">Survey Cycles</div><div class="sc-value" id="s-cycles">—</div><div class="sc-sub" id="s-daterange"></div></div>
     <div class="summary-card"><div class="sc-label">Test Points</div><div class="sc-value" id="s-points">—</div></div>
+    <div class="summary-card" style="border-color:var(--teal)"><div class="sc-label">Station Criteria</div><div class="sc-value" id="s-criteria" style="font-size:13px;color:var(--teal)">—</div><div class="sc-sub">Auto-detected from limits</div></div>
     <div class="summary-card red">   <div class="sc-label">Critical</div>  <div class="sc-value" id="s-red">—</div>   <div class="sc-sub">Failing threshold or ≤25mV gap</div></div>
-    <div class="summary-card orange"><div class="sc-label">High Concern</div><div class="sc-value" id="s-orange">—</div><div class="sc-sub">Below threshold or 26-40mV gap</div></div>
-    <div class="summary-card yellow"><div class="sc-label">Monitor</div>   <div class="sc-value" id="s-yellow">—</div>  <div class="sc-sub">Bottom quartile or 41-55mV gap</div></div>
+    <div class="summary-card orange"><div class="sc-label">High Concern</div><div class="sc-value" id="s-orange">—</div><div class="sc-sub">Within 10mV of limit or 26–40mV gap</div></div>
+    <div class="summary-card yellow"><div class="sc-label">Monitor</div>   <div class="sc-value" id="s-yellow">—</div>  <div class="sc-sub">11–20mV from limit or 41–55mV gap</div></div>
     <div class="summary-card green"> <div class="sc-label">Passing</div>   <div class="sc-value" id="s-green">—</div>   <div class="sc-sub">Acceptable protection</div></div>
     <div class="summary-card"><div class="sc-label">Cycle Drops ≥35mV</div><div class="sc-value" id="s-drops">—</div><div class="sc-sub">Since last survey</div></div>
   </div>
@@ -483,20 +484,37 @@ function analyze(records) {
 
     const bestOff = Math.min(...sortedCycles.filter(c => c.off !== null).map(c => c.off));
 
-    // ── SCORING — three independent criteria, worst wins ─────────────────────
+    // ── SCORING — threshold drives color, gap/fluct can elevate ─────────────
 
-    // 1. PASS/FAIL vs lower limit
-    // Failing = off-read is numerically higher (less negative) than lower limit
-    let thresholdScore = 'green';
+    // 1. THRESHOLD — off-read AND on-read checked for hard fail
+    let thresholdScore   = 'green';
     let failingThreshold = false;
+    let proximityMv      = null;  // how many mV off-read is from limit
+    let proximityScore   = 'green';
+    let onFailing        = false;
+
     if (offRead !== null && offLimit !== null) {
+      const margin = Math.round((offLimit - offRead) * 1000); // negative = passing, positive = failing
       if (offRead > offLimit) {
+        // Hard fail — red regardless
         failingThreshold = true;
-        thresholdScore = 'red';
+        thresholdScore   = 'red';
+      } else {
+        // Passing — check proximity
+        proximityMv = Math.round((offRead - offLimit) * -1000); // how many mV above limit (positive = passing margin)
+        if      (proximityMv <= 10) proximityScore = 'orange';
+        else if (proximityMv <= 20) proximityScore = 'yellow';
+        thresholdScore = proximityScore;
       }
     } else if (offRead !== null) {
-      // No limit available — use bottom quartile logic (set later)
       thresholdScore = 'unknown';
+    }
+
+    // Check on-read hard fail against same lower limit
+    if (onRead !== null && offLimit !== null && onRead > offLimit) {
+      onFailing    = true;
+      thresholdScore = 'red';
+      failingThreshold = true;
     }
 
     // 2. CYCLE FLUCTUATION (positive offDelta = dropped = worse)
@@ -505,26 +523,36 @@ function analyze(records) {
       if      (offDelta >= 35) fluctScore = 'red';
       else if (offDelta >= 15) fluctScore = 'orange';
       else if (offDelta >= 10) fluctScore = 'yellow';
-      else if (offDelta > 0)   fluctScore = 'green';
-      else                     fluctScore = 'green'; // improved
+      else                     fluctScore = 'green';
     }
 
     // 3. ON/OFF DIFFERENTIAL
-    // 0-25mV = red | 26-40mV = orange | 41-55mV = yellow | >55mV = green
     let diffScore = 'green';
     if (diff !== null) {
       if      (diff <= 25) diffScore = 'red';
       else if (diff <= 40) diffScore = 'orange';
       else if (diff <= 55) diffScore = 'yellow';
-      else                 diffScore = 'green'; // >55mV is always green for differential
+      else                 diffScore = 'green';
     }
 
-    // Worst score wins
-    const rank = { red:0, orange:1, yellow:2, green:3, unknown:2 };
-    const scores = [thresholdScore, fluctScore, diffScore];
-    const worstRank = Math.min(...scores.map(s => rank[s] ?? 2));
-    const colorMap  = ['red','orange','yellow','green'];
-    let color = colorMap[worstRank];
+    // ── COMBINE — threshold drives color, gap/fluct can elevate ──────────────
+    const rank    = { red:0, orange:1, yellow:2, green:3, unknown:2 };
+    let color;
+
+    if (thresholdScore === 'red') {
+      color = 'red'; // hard fail always red
+    } else {
+      // Threshold is passing — start with threshold proximity score
+      let baseScore = thresholdScore === 'unknown' ? 'yellow' : thresholdScore;
+
+      // Yellow proximity + red gap → upgrade to orange
+      if (baseScore === 'yellow' && diffScore === 'red') baseScore = 'orange';
+
+      // Now take worst of base, fluct, diff
+      const allScores = [baseScore, fluctScore, diffScore];
+      const worstRank = Math.min(...allScores.map(s => rank[s] ?? 2));
+      color = ['red','orange','yellow','green'][worstRank];
+    }
 
     // POD detection: very high differential and healthy off-read
     const isPOD = diff !== null && diff > 150 && offRead !== null && offRead < -0.550;
@@ -535,7 +563,8 @@ function analyze(records) {
     // Bottom quartile placeholder — resolved after all points collected
     points.push({
       tp, address: data.address, offRead, onRead, diff, offDelta, onDelta,
-      bestOff, color, offLimit, failingThreshold, fluctScore, diffScore,
+      bestOff, color, offLimit, failingThreshold, onFailing, proximityMv,
+      proximityScore, fluctScore, diffScore,
       thresholdScore, drops: [], cycles: sortedCycles, isPOD, improving
     });
   }
@@ -617,12 +646,20 @@ function buildExplanation(p) {
   // ── 1. THRESHOLD ──────────────────────────────────────────────────────────
   if (p.offLimit !== null) {
     if (p.failingThreshold) {
-      parts.push(`<b style="color:var(--red)">⚠ FAILING THRESHOLD:</b> Off-read of ${offStr} does not meet the lower limit of ${limStr}. The pipe at this location is not receiving adequate cathodic protection — this is a failing read per station criteria.`);
+      if (p.onFailing) {
+        parts.push(`<b style="color:var(--red)">⚠ ON-READ FAILING:</b> On-read of ${onStr} does not meet the lower limit of ${limStr}. The pipe is not adequately polarized at this location.`);
+      } else {
+        parts.push(`<b style="color:var(--red)">⚠ FAILING THRESHOLD:</b> Off-read of ${offStr} does not meet the lower limit of ${limStr}. The pipe at this location is not receiving adequate cathodic protection — this is a failing read per station criteria.`);
+      }
+    } else if (p.proximityMv !== null && p.proximityMv <= 10) {
+      parts.push(`<b style="color:var(--orange)">⚠ NEAR LIMIT (ORANGE):</b> Off-read of ${offStr} is only ${p.proximityMv}mV above the lower limit of ${limStr}. Within 10mV of failing — approaching threshold. Monitor closely and investigate current flow at this location.`);
+    } else if (p.proximityMv !== null && p.proximityMv <= 20) {
+      parts.push(`<b style="color:var(--yellow)">△ APPROACHING LIMIT (YELLOW):</b> Off-read of ${offStr} is ${p.proximityMv}mV above the lower limit of ${limStr}. Between 11–20mV from failing — flagged for monitoring. Any further drop will trigger orange.`);
     } else {
-      parts.push(`<b style="color:var(--green)">✓ THRESHOLD PASSING:</b> Off-read of ${offStr} meets the lower limit of ${limStr}.`);
+      parts.push(`<b style="color:var(--green)">✓ THRESHOLD PASSING:</b> Off-read of ${offStr} meets the lower limit of ${limStr} with a margin of ${p.proximityMv !== null ? p.proximityMv + 'mV' : 'adequate margin'}.`);
     }
   } else if (p.bottomQuartile) {
-    parts.push(`<b style="color:var(--orange)">△ BOTTOM QUARTILE (No Limit Available):</b> Off-read of ${offStr} falls in the bottom 25% of station readings. No lower limit is available for this test point so pass/fail cannot be determined. Flagged for monitoring — no meaningful drop observed from prior survey.`);
+    parts.push(`<b style="color:var(--orange)">△ BOTTOM QUARTILE (No Limit Available):</b> Off-read of ${offStr} falls in the bottom 25% of station readings. No lower limit is available for this test point so pass/fail cannot be determined. Flagged for monitoring.`);
   }
 
   // ── 2. CYCLE FLUCTUATION ──────────────────────────────────────────────────
@@ -687,6 +724,26 @@ function parseAndRender() {
   document.getElementById('s-green').textContent   = points.filter(p => p.color === 'green').length;
   const totalDrops = points.reduce((sum, p) => sum + p.drops.filter(d => d.mvDrop >= 35).length, 0);
   document.getElementById('s-drops').textContent   = totalDrops;
+  // ── STATION CRITERIA AUTO-DETECTION ─────────────────────────────────────────
+  // If lower limit is less negative than -850mV → 100mV criterion TP
+  // If lower limit is exactly -850mV → 850mV criterion TP
+  const limitsWithValues = points.filter(p => p.offLimit !== null);
+  let criteriaType = 'unknown';
+  if (limitsWithValues.length) {
+    const is850  = limitsWithValues.filter(p => Math.abs(p.offLimit + 0.850) < 0.005);
+    const is100  = limitsWithValues.filter(p => p.offLimit > -0.850);
+    if (is850.length && is100.length) criteriaType = 'mixed';
+    else if (is850.length)            criteriaType = '850mv';
+    else if (is100.length)            criteriaType = '100mv';
+  }
+  const criteriaLabels = {
+    '850mv':   '850mV',
+    '100mv':   '100mV Polarization',
+    'mixed':   'Mixed 850 & 100mV',
+    'unknown': 'Unknown'
+  };
+  const criteriaEl = document.getElementById('s-criteria');
+  if (criteriaEl) criteriaEl.textContent = criteriaLabels[criteriaType] || '—';
   document.getElementById('summary-row').style.display = 'flex';
   // Show notice if no limits available
   const hasLimits = points.some(p => p.offLimit !== null);
