@@ -48,8 +48,21 @@
   .mode-btn.danger:hover { background: #6a2020; border-color: var(--red); color: #fff; }
 
   /* SIDEBAR MODE BUTTONS */
-  .sidebar-modes { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+  .sidebar-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
   .sidebar-modes .mode-btn { padding: 7px 4px; font-size: 10px; text-align: center; width: 100%; }
+
+  /* FEATURES DROPDOWN */
+  .features-wrap { position: relative; }
+  .features-btn { width: 100%; padding: 7px 4px; font-size: 10px; text-align: center; background: var(--panel); border: 1px solid var(--border); color: var(--text-dim); cursor: pointer; font-family: inherit; text-transform: uppercase; letter-spacing: 1px; transition: all .15s; }
+  .features-btn:hover { background: var(--teal-dark); border-color: var(--teal); color: #fff; }
+  .features-btn.active { background: var(--teal-dim); border-color: var(--teal); color: #fff; font-weight: bold; }
+  .features-dropdown { position: absolute; top: 100%; left: 0; right: 0; z-index: 90; background: var(--surface); border: 1px solid var(--teal-dark); box-shadow: 0 4px 16px rgba(0,0,0,0.5); display: none; flex-direction: column; min-width: 160px; }
+  .features-dropdown.open { display: flex; }
+  .feat-item { padding: 10px 14px; font-size: 11px; color: var(--text-dim); cursor: pointer; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(106,115,125,0.2); transition: background .1s; letter-spacing: 0.5px; font-family: 'Courier New', monospace; }
+  .feat-item:last-child { border-bottom: none; }
+  .feat-item:hover { background: rgba(77,217,232,0.1); color: var(--text); }
+  .feat-item.feat-active { background: rgba(77,217,232,0.12); color: var(--teal); font-weight: bold; border-left: 3px solid var(--teal); padding-left: 11px; }
+  .feat-icon { width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 13px; }
 
   /* LAYOUT */
   .main { display: flex; flex: 1; overflow: hidden; }
@@ -215,8 +228,59 @@
     <!-- Mode Buttons -->
     <div class="sidebar-modes">
       <button class="mode-btn active" id="btn-place" onclick="setMode('place')">◇ Place</button>
-      <button class="mode-btn"        id="btn-rect"  onclick="setMode('rect')">⚡ Rectifier</button>
-      <button class="mode-btn"        id="btn-arrow" onclick="setMode('arrow')">→ Arrow</button>
+      <div class="features-wrap">
+        <button class="features-btn" id="btn-features" onclick="toggleFeaturesMenu()">+ Features ▾</button>
+        <div class="features-dropdown" id="features-dropdown">
+
+          <!-- 1. Rectifier -->
+          <div class="feat-item" id="feat-rect" onclick="selectFeature('rect')">
+            <svg width="20" height="20" viewBox="0 0 20 20" style="flex-shrink:0">
+              <circle cx="10" cy="10" r="8" fill="rgba(240,192,48,0.15)" stroke="#d4a000" stroke-width="1.8"/>
+              <text x="10" y="14" text-anchor="middle" font-size="10" fill="#d4a000">⚡</text>
+            </svg>
+            Rectifier
+          </div>
+
+          <!-- 2. Arrow -->
+          <div class="feat-item" id="feat-arrow" onclick="selectFeature('arrow')">
+            <svg width="20" height="20" viewBox="0 0 20 20" style="flex-shrink:0">
+              <line x1="2" y1="10" x2="14" y2="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <polygon points="14,6 20,10 14,14" fill="currentColor"/>
+            </svg>
+            Arrow
+          </div>
+
+          <!-- 3. Bonds (closed) — H on top of circle -->
+          <div class="feat-item" id="feat-closed-bond" onclick="selectFeature('closed-bond')">
+            <svg width="20" height="26" viewBox="0 0 20 26" style="flex-shrink:0">
+              <circle cx="10" cy="19" r="7" fill="white" stroke="currentColor" stroke-width="1.8"/>
+              <line x1="6"  y1="5"  x2="6"  y2="13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <line x1="14" y1="5"  x2="14" y2="13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <line x1="6"  y1="9"  x2="14" y2="9"  stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+            Bonds
+          </div>
+
+          <!-- 4. Open Bond — hollow circle -->
+          <div class="feat-item" id="feat-open-bond" onclick="selectFeature('open-bond')">
+            <svg width="20" height="20" viewBox="0 0 20 20" style="flex-shrink:0">
+              <circle cx="10" cy="10" r="8" fill="white" stroke="currentColor" stroke-width="2"/>
+            </svg>
+            Open Bonds
+          </div>
+
+          <!-- 5. Valve / No Bond — circle divided into 4 -->
+          <div class="feat-item" id="feat-valve" onclick="selectFeature('valve')">
+            <svg width="20" height="20" viewBox="0 0 20 20" style="flex-shrink:0">
+              <circle cx="10" cy="10" r="8" fill="white" stroke="currentColor" stroke-width="2"/>
+              <line x1="10" y1="2"  x2="10" y2="18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <line x1="2"  y1="10" x2="18" y2="10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+            Valve / No Bond
+          </div>
+
+        </div>
+      </div>
     </div>
 
     <!-- PDF Upload -->
@@ -284,7 +348,27 @@
       <div class="legend-item"><div class="legend-diamond" style="background:rgba(77,166,255,0.15);border-color:#4da6ff"></div> Low (−70–−41% / 0.30–0.59×)</div>
       <div class="legend-item"><div class="legend-diamond" style="background:rgba(77,166,255,0.07);border-color:rgba(77,166,255,0.4)"></div> Critically Low (&lt;−70% / &lt;0.30×)</div>
       <div class="legend-item"><div class="legend-diamond" style="background:rgba(77,217,232,0.15);border-color:var(--teal);border-style:dashed"></div> Estimate (no history)</div>
-      <div class="legend-item"><div class="legend-circle" style="background:#fff;border-color:#000"></div> Open Bond</div>
+      <div class="legend-item">
+        <svg width="20" height="20" viewBox="0 0 20 20" style="flex-shrink:0"><circle cx="10" cy="10" r="8" fill="white" stroke="#000" stroke-width="2"/></svg>
+        Open Bonds
+      </div>
+      <div class="legend-item">
+        <svg width="20" height="26" viewBox="0 0 20 26" style="flex-shrink:0">
+          <circle cx="10" cy="19" r="7" fill="white" stroke="#222" stroke-width="1.8"/>
+          <line x1="6" y1="5" x2="6" y2="13" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="14" y1="5" x2="14" y2="13" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="6" y1="9" x2="14" y2="9" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+        Bonds (Closed)
+      </div>
+      <div class="legend-item">
+        <svg width="20" height="20" viewBox="0 0 20 20" style="flex-shrink:0">
+          <circle cx="10" cy="10" r="8" fill="white" stroke="#222" stroke-width="2"/>
+          <line x1="10" y1="2" x2="10" y2="18" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="2" y1="10" x2="18" y2="10" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+        Valve / No Bond
+      </div>
       <div class="legend-item"><div class="legend-circle" style="background:rgba(240,192,48,0.15);border-color:#f0c030"></div> ⚡ Rectifier</div>
       <div class="legend-item"><div style="width:24px;height:2px;background:#000;position:relative;flex-shrink:0"><div style="position:absolute;right:-1px;top:-4px;width:0;height:0;border-left:8px solid #000;border-top:5px solid transparent;border-bottom:5px solid transparent"></div></div> &nbsp;Flow Arrow — click for direction/delete menu</div>
     </div>
@@ -387,10 +471,11 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 // ── CONSTANTS & STATE ─────────────────────────────────────────────────────────
-const STORAGE_PINS   = 'cm_pins';
-const STORAGE_RECT   = 'cm_rectifier';
-const STORAGE_ARROWS = 'cm_arrows';
-const STORAGE_PDF    = 'cm_pdf_name';
+const STORAGE_PINS      = 'cm_pins';
+const STORAGE_RECT      = 'cm_rectifier';
+const STORAGE_ARROWS    = 'cm_arrows';
+const STORAGE_ANNOTS    = 'cm_annotations'; // open bond, closed bond, valve
+const STORAGE_PDF       = 'cm_pdf_name';
 const KEY_FE         = 'fe_results';
 const KEY_FE_RECT    = 'fe_rectifier';
 const DIAMOND_R      = 28;
@@ -453,9 +538,11 @@ let pageNum   = 1;
 let scale     = 1.0;
 let zoom      = 0.5;
 let pins      = [];
-let arrows    = []; // { id, x, y, dir } dir: 0=right 1=down 2=left 3=up
+let arrows    = [];
+let annots    = []; // { id, type, x, y, label } type: open-bond|closed-bond|valve
 let rectifier = null;
-let mode      = 'place'; // default to place — drag now works universally
+let mode      = 'place';
+let featureMode = null; // 'rect'|'arrow'|'open-bond'|'closed-bond'|'valve' // default to place — drag now works universally
 let isDragging    = false;
 let dragPin       = null;
 let dragOffX = 0, dragOffY = 0;
@@ -474,12 +561,14 @@ function loadState() {
   try { pins      = JSON.parse(localStorage.getItem(STORAGE_PINS)   || '[]'); } catch(e) { pins = []; }
   try { rectifier = JSON.parse(localStorage.getItem(STORAGE_RECT)   || 'null'); } catch(e) { rectifier = null; }
   try { arrows    = JSON.parse(localStorage.getItem(STORAGE_ARROWS) || '[]'); } catch(e) { arrows = []; }
+  try { annots    = JSON.parse(localStorage.getItem(STORAGE_ANNOTS) || '[]'); } catch(e) { annots = []; }
   updateRectStatus();
 }
 
 function savePins()      { try { localStorage.setItem(STORAGE_PINS,   JSON.stringify(pins));      } catch(e) {} }
 function saveRectifier() { try { localStorage.setItem(STORAGE_RECT,   JSON.stringify(rectifier)); } catch(e) {} }
 function saveArrows()    { try { localStorage.setItem(STORAGE_ARROWS, JSON.stringify(arrows));    } catch(e) {} }
+function saveAnnots()    { try { localStorage.setItem(STORAGE_ANNOTS, JSON.stringify(annots));    } catch(e) {} }
 
 // ── LOAD FIELD ENTRIES FROM fe_results ───────────────────────────────────────
 function loadFieldEntries() {
@@ -629,14 +718,60 @@ async function changeZoom(delta) {
 // ── MODE ──────────────────────────────────────────────────────────────────────
 function setMode(m) {
   mode = m;
-  ['place','rect','arrow'].forEach(id => {
+  featureMode = null;
+  ['place'].forEach(id => {
     const el = document.getElementById('btn-' + id);
     if (el) el.classList.toggle('active', id === m);
   });
+  // Deactivate features button when switching to place
+  const fb = document.getElementById('btn-features');
+  if (fb) fb.classList.remove('active');
+  closeFeaturesMenu();
   if (m !== 'place') { selectedFeId = null; pendingPlacement = null; renderSidebar(); }
   overlayCanvas.style.cursor = 'crosshair';
   document.getElementById('sb-mode').textContent = m.toUpperCase();
 }
+
+function toggleFeaturesMenu() {
+  const dd = document.getElementById('features-dropdown');
+  dd.classList.toggle('open');
+}
+
+function closeFeaturesMenu() {
+  const dd = document.getElementById('features-dropdown');
+  if (dd) dd.classList.remove('open');
+}
+
+function selectFeature(type) {
+  featureMode = type;
+  mode = 'feature';
+  closeFeaturesMenu();
+
+  // Deactivate place button, activate features button
+  const pb = document.getElementById('btn-place');
+  if (pb) pb.classList.remove('active');
+  const fb = document.getElementById('btn-features');
+  if (fb) fb.classList.add('active');
+
+  // Highlight selected feature item
+  document.querySelectorAll('.feat-item').forEach(el => el.classList.remove('feat-active'));
+  const el = document.getElementById('feat-' + type);
+  if (el) el.classList.add('feat-active');
+
+  const labels = {
+    'rect': '⚡ RECTIFIER', 'arrow': '→ ARROW',
+    'open-bond': 'OPEN BONDS', 'closed-bond': 'BONDS (CLOSED)', 'valve': 'VALVE / NO BOND'
+  };
+  overlayCanvas.style.cursor = 'crosshair';
+  document.getElementById('sb-mode').textContent = labels[type] || type.toUpperCase();
+  setMsg('Click the map to place: ' + (labels[type] || type));
+}
+
+// Close features menu when clicking outside
+document.addEventListener('click', e => {
+  const wrap = document.querySelector('.features-wrap');
+  if (wrap && !wrap.contains(e.target)) closeFeaturesMenu();
+});
 
 // ── DRAW OVERLAY ──────────────────────────────────────────────────────────────
 function drawOverlay() {
@@ -653,6 +788,11 @@ function drawOverlay() {
   // Draw flow arrows
   for (const arrow of arrows) {
     drawArrow(arrow);
+  }
+
+  // Draw annotations (open bond, closed bond, valve)
+  for (const a of annots) {
+    drawAnnot(a);
   }
 
   // Draw rectifier
@@ -702,6 +842,95 @@ function drawArrow(arrow) {
   overlayCtx.closePath();
   overlayCtx.shadowBlur = 0;
   overlayCtx.fill();
+
+  overlayCtx.restore();
+}
+
+// ── DRAW ANNOTATION (open bond, closed bond, valve) ──────────────────────────
+function drawAnnot(a) {
+  const sx = a.x * scale;
+  const sy = a.y * scale;
+  const r  = Math.max(10, 13 * scale);
+  const lw = Math.max(1.8, 2 * scale);
+
+  overlayCtx.save();
+  overlayCtx.shadowColor = 'rgba(255,255,255,0.7)';
+  overlayCtx.shadowBlur  = 2;
+
+  if (a.type === 'open-bond') {
+    // Hollow white circle, black border
+    overlayCtx.beginPath();
+    overlayCtx.arc(sx, sy, r, 0, Math.PI * 2);
+    overlayCtx.fillStyle   = '#ffffff';
+    overlayCtx.fill();
+    overlayCtx.strokeStyle = '#000000';
+    overlayCtx.lineWidth   = lw;
+    overlayCtx.stroke();
+
+  } else if (a.type === 'closed-bond') {
+    // Circle with H on top connecting at circle top edge
+    const circleY = sy + r * 0.4; // shift circle down so H sits above center
+    const circleR = r;
+    const hTop    = circleY - circleR;      // top of circle = bottom of H legs
+    const hH      = r * 1.0;               // H height
+    const hW      = r * 0.85;              // H width (half)
+    const hLeft   = sx - hW;
+    const hRight  = sx + hW;
+    const hMid    = hTop - hH * 0.5;      // crossbar midpoint
+    const hTopY   = hTop - hH;            // top of H legs
+
+    // Draw circle
+    overlayCtx.beginPath();
+    overlayCtx.arc(sx, circleY, circleR, 0, Math.PI * 2);
+    overlayCtx.fillStyle   = '#ffffff';
+    overlayCtx.fill();
+    overlayCtx.strokeStyle = '#222222';
+    overlayCtx.lineWidth   = lw;
+    overlayCtx.stroke();
+
+    // Draw H — left leg, right leg, crossbar
+    overlayCtx.strokeStyle = '#222222';
+    overlayCtx.lineWidth   = lw;
+    overlayCtx.lineCap     = 'round';
+    overlayCtx.beginPath();
+    overlayCtx.moveTo(hLeft, hTopY); overlayCtx.lineTo(hLeft, hTop);   // left leg
+    overlayCtx.moveTo(hRight, hTopY); overlayCtx.lineTo(hRight, hTop); // right leg
+    overlayCtx.moveTo(hLeft, hMid); overlayCtx.lineTo(hRight, hMid);   // crossbar
+    overlayCtx.stroke();
+
+  } else if (a.type === 'valve') {
+    // White circle divided into 4 equal parts by horizontal and vertical lines
+    overlayCtx.beginPath();
+    overlayCtx.arc(sx, sy, r, 0, Math.PI * 2);
+    overlayCtx.fillStyle   = '#ffffff';
+    overlayCtx.fill();
+    overlayCtx.strokeStyle = '#222222';
+    overlayCtx.lineWidth   = lw;
+    overlayCtx.stroke();
+    // Vertical divider
+    overlayCtx.beginPath();
+    overlayCtx.moveTo(sx, sy - r); overlayCtx.lineTo(sx, sy + r);
+    overlayCtx.moveTo(sx - r, sy); overlayCtx.lineTo(sx + r, sy);
+    overlayCtx.strokeStyle = '#222222';
+    overlayCtx.lineWidth   = lw;
+    overlayCtx.lineCap     = 'round';
+    overlayCtx.stroke();
+  }
+
+  overlayCtx.shadowBlur = 0;
+
+  // Label below
+  if (a.label) {
+    const fs = Math.max(7, Math.min(9, 7 * scale));
+    overlayCtx.font          = `${fs}px Courier New`;
+    overlayCtx.textAlign     = 'center';
+    overlayCtx.textBaseline  = 'top';
+    overlayCtx.fillStyle     = '#000';
+    overlayCtx.shadowColor   = 'rgba(255,255,255,0.9)';
+    overlayCtx.shadowBlur    = 3;
+    overlayCtx.fillText(a.label.substring(0, 20), sx, sy + r + 3);
+    overlayCtx.shadowBlur    = 0;
+  }
 
   overlayCtx.restore();
 }
@@ -869,6 +1098,16 @@ function arrowAtXY(cx, cy) {
   return null;
 }
 
+
+function annotAtXY(cx, cy) {
+  const hitR = Math.max(18, 14 * scale);
+  for (const a of [...annots].reverse()) {
+    const dx = a.x * scale - cx;
+    const dy = a.y * scale - cy;
+    if (Math.sqrt(dx*dx + dy*dy) <= hitR) return a;
+  }
+  return null;
+}
 // ── PLACE PIN ─────────────────────────────────────────────────────────────────
 function placeNextUnplaced(x, y) {
   const unplaced = pins.filter(p => !p.placed);
@@ -1246,6 +1485,13 @@ overlayCanvas.addEventListener('mousedown', e => {
     dragStartX = cx; dragStartY = cy;
     return;
   }
+  const annot = annotAtXY(cx, cy);
+  if (annot) {
+    dragCandidate = annot; dragCandidateType = 'annot';
+    dragOffX = cx - annot.x * scale; dragOffY = cy - annot.y * scale;
+    dragStartX = cx; dragStartY = cy;
+    return;
+  }
   if (rectAtXY(cx, cy)) {
     dragCandidate = rectifier; dragCandidateType = 'rect';
     dragOffX = cx - rectifier.x * scale; dragOffY = cy - rectifier.y * scale;
@@ -1267,6 +1513,7 @@ document.addEventListener('mousemove', e => {
       overlayCanvas.style.cursor = 'grabbing';
       if (dragCandidateType === 'pin')   { dragPin = dragCandidate; }
       if (dragCandidateType === 'arrow') { overlayCanvas.dataset.draggingArrow = dragCandidate.id; }
+      if (dragCandidateType === 'annot') { overlayCanvas.dataset.draggingAnnot = dragCandidate.id; }
       if (dragCandidateType === 'rect')  { overlayCanvas.dataset.draggingRect  = '1'; }
     }
   }
@@ -1276,6 +1523,9 @@ document.addEventListener('mousemove', e => {
   if (overlayCanvas.dataset.draggingRect === '1' && rectifier) {
     rectifier.x = (cx - dragOffX) / scale;
     rectifier.y = (cy - dragOffY) / scale;
+  } else if (overlayCanvas.dataset.draggingAnnot) {
+    const a = annots.find(x => x.id == overlayCanvas.dataset.draggingAnnot);
+    if (a) { a.x = (cx - dragOffX) / scale; a.y = (cy - dragOffY) / scale; }
   } else if (overlayCanvas.dataset.draggingArrow) {
     const arr = arrows.find(a => a.id == overlayCanvas.dataset.draggingArrow);
     if (arr) { arr.x = (cx - dragOffX) / scale; arr.y = (cy - dragOffY) / scale; }
@@ -1287,7 +1537,6 @@ document.addEventListener('mousemove', e => {
 });
 
 document.addEventListener('mouseup', e => {
-  // Clear drag candidate regardless
   dragCandidate     = null;
   dragCandidateType = null;
 
@@ -1298,6 +1547,10 @@ document.addEventListener('mouseup', e => {
     saveRectifier(); drawOverlay(); updateRectStatus();
     setMsg('Rectifier repositioned.');
     delete overlayCanvas.dataset.draggingRect;
+  } else if (overlayCanvas.dataset.draggingAnnot) {
+    saveAnnots(); drawOverlay();
+    setMsg('Annotation repositioned.');
+    delete overlayCanvas.dataset.draggingAnnot;
   } else if (overlayCanvas.dataset.draggingArrow) {
     saveArrows(); drawOverlay();
     setMsg('Arrow repositioned.');
@@ -1335,6 +1588,19 @@ overlayCanvas.addEventListener('mousemove', e => {
   if (hovArrow) {
     overlayCanvas.style.cursor = 'pointer';
     tooltip.style.display = 'none';
+    return;
+  }
+
+  // Annotation hover
+  const hovAnnot = annotAtXY(cx, cy);
+  if (hovAnnot) {
+    overlayCanvas.style.cursor = 'pointer';
+    const typeLabels = { 'open-bond':'Open Bonds', 'closed-bond':'Bonds (Closed)', 'valve':'Valve / No Bond' };
+    document.getElementById('tt-name').textContent  = typeLabels[hovAnnot.type] || hovAnnot.type;
+    document.getElementById('tt-reads').textContent = hovAnnot.label || 'No location set';
+    tooltip.style.display = 'block';
+    tooltip.style.left = (e.clientX + 14) + 'px';
+    tooltip.style.top  = (e.clientY - 10) + 'px';
     return;
   }
 
@@ -1437,31 +1703,52 @@ overlayCanvas.addEventListener('click', e => {
     return;
   }
 
+  // ── ANNOTATION — context menu (open bond, closed bond, valve) ────────────────
+  const annot = annotAtXY(cx, cy);
+  if (annot) {
+    ctxTarget = annot;
+    const typeLabels = { 'open-bond':'Open Bonds', 'closed-bond':'Bonds (Closed)', 'valve':'Valve / No Bond' };
+    showCtxMenu(e.clientX, e.clientY, typeLabels[annot.type] || annot.type, [
+      { icon: 'ℹ',  label: 'View Info',   action: 'annot-info'   },
+      { divider: true },
+      { icon: '🗑', label: 'Delete',      action: 'annot-delete', danger: true },
+    ]);
+    return;
+  }
+
   // ── EMPTY MAP CLICK — mode-specific ───────────────────────────────────────
-  closeCtxMenu(); // safe to close here — no item was clicked
+  closeCtxMenu();
   if (mode === 'place') {
     if (!pdfDoc)              { setMsg('Upload a PDF map first.'); return; }
     if (!scale || scale <= 0) { setMsg('Map is still rendering — please wait.'); return; }
     placeNextUnplaced(cx / scale, cy / scale);
     return;
   }
-  if (mode === 'arrow') {
+  if (mode === 'feature') {
     if (!pdfDoc) { setMsg('Upload a PDF map first.'); return; }
-    arrows.push({ id: Date.now(), x: cx / scale, y: cy / scale, dir: 0 });
-    saveArrows(); drawOverlay();
-    setMsg('Arrow dropped → Right. Click it to change direction or delete.');
-    return;
+    if (featureMode === 'arrow') {
+      arrows.push({ id: Date.now(), x: cx / scale, y: cy / scale, dir: 0 });
+      saveArrows(); drawOverlay();
+      setMsg('Arrow dropped → Right. Click it to change direction or delete.');
+      return;
+    }
+    if (featureMode === 'rect') {
+      const x = cx / scale, y = cy / scale;
+      if (!rectifier) rectifier = { x, y, station: '', amps: null, volts: null, minAmps: null, maxAmps: null, minVolts: null, maxVolts: null };
+      else { rectifier.x = x; rectifier.y = y; }
+      saveRectifier(); drawOverlay(); updateRectStatus();
+      openRectModal();
+      return;
+    }
+    if (['open-bond','closed-bond','valve'].includes(featureMode)) {
+      const label = prompt('Enter intersection or address for this marker (optional):') || '';
+      annots.push({ id: Date.now(), type: featureMode, x: cx / scale, y: cy / scale, label: label.trim() });
+      saveAnnots(); drawOverlay();
+      const typeLabels = { 'open-bond':'Open Bonds', 'closed-bond':'Bonds (Closed)', 'valve':'Valve / No Bond' };
+      setMsg((typeLabels[featureMode] || featureMode) + ' placed' + (label ? ': ' + label : '') + '. Click to view or delete.');
+      return;
+    }
   }
-  if (mode === 'rect') {
-    if (!pdfDoc) { setMsg('Upload a PDF map first.'); return; }
-    const x = cx / scale, y = cy / scale;
-    if (!rectifier) rectifier = { x, y, station: '', amps: null, volts: null, minAmps: null, maxAmps: null, minVolts: null, maxVolts: null };
-    else { rectifier.x = x; rectifier.y = y; }
-    saveRectifier(); drawOverlay(); updateRectStatus();
-    openRectModal();
-    return;
-  }
-});
 
 // ── EXPORT PDF ────────────────────────────────────────────────────────────────
 async function exportPDF() {
@@ -1557,10 +1844,10 @@ async function exportPDF() {
 
 // ── MISC ──────────────────────────────────────────────────────────────────────
 function clearAll() {
-  if (!confirm('Remove ALL pins and arrows from the current map? This cannot be undone.')) return;
-  pins = []; arrows = [];
-  savePins(); saveArrows(); drawOverlay(); renderSidebar();
-  setMsg('All pins and arrows cleared.');
+  if (!confirm('Remove ALL pins, arrows and annotations from the current map? This cannot be undone.')) return;
+  pins = []; arrows = []; annots = [];
+  savePins(); saveArrows(); saveAnnots(); drawOverlay(); renderSidebar();
+  setMsg('All pins, arrows and annotations cleared.');
 }
 
 async function clearMap() {
@@ -1641,7 +1928,17 @@ function ctxAction(action) {
     pins = pins.filter(p => p.feId !== target.feId);
     savePins(); renderSidebar(); drawOverlay(); setMsg('Deleted: ' + addr); return;
   }
-  if (action === 'rect-info')   { showRectDetail(null); return; }
+  if (action === 'annot-info') {
+    const typeLabels = { 'open-bond':'Open Bonds', 'closed-bond':'Bonds (Closed)', 'valve':'Valve / No Bond' };
+    setMsg((typeLabels[target.type] || target.type) + (target.label ? ' — ' + target.label : ''));
+    return;
+  }
+  if (action === 'annot-delete') {
+    annots = annots.filter(a => a.id !== target.id);
+    saveAnnots(); drawOverlay();
+    setMsg('Annotation deleted.');
+    return;
+  }
   if (action === 'rect-edit')   { openRectModal(); return; }
   if (action === 'rect-delete') {
     rectifier = null;
