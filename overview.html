@@ -184,9 +184,8 @@
 
   <!-- SUMMARY CARDS -->
   <div class="summary-row" id="summary-row" style="display:none">
-    <div class="summary-card"><div class="sc-label">Survey Cycles</div><div class="sc-value" id="s-cycles">—</div><div class="sc-sub" id="s-daterange"></div></div>
-    <div class="summary-card"><div class="sc-label">Test Points</div><div class="sc-value" id="s-points">—</div></div>
     <div class="summary-card" style="border-color:var(--teal)"><div class="sc-label">Station Criteria</div><div class="sc-value" id="s-criteria" style="font-size:13px;color:var(--teal)">—</div><div class="sc-sub">Auto-detected from limits</div></div>
+    <div class="summary-card"><div class="sc-label">Test Points</div><div class="sc-value" id="s-points">—</div></div>
     <div class="summary-card red">   <div class="sc-label">Critical</div>  <div class="sc-value" id="s-red">—</div>   <div class="sc-sub">Failing threshold or ≤25mV gap</div></div>
     <div class="summary-card orange"><div class="sc-label">High Concern</div><div class="sc-value" id="s-orange">—</div><div class="sc-sub">Within 10mV of limit or 26–40mV gap</div></div>
     <div class="summary-card yellow"><div class="sc-label">Monitor</div>   <div class="sc-value" id="s-yellow">—</div>  <div class="sc-sub">11–20mV from limit or 41–55mV gap</div></div>
@@ -714,9 +713,6 @@ function parseAndRender() {
   if (!points.length) { setMsg('Could not build on/off pairs from data.'); return; }
 
   // Summary counts
-  const cycles = [...new Set(records.map(r => r.date.toISOString().slice(0,10)))].sort();
-  document.getElementById('s-cycles').textContent = cycles.length;
-  document.getElementById('s-daterange').textContent = cycles[cycles.length-1] + ' → ' + cycles[0];
   document.getElementById('s-points').textContent  = points.length;
   document.getElementById('s-red').textContent     = points.filter(p => p.color === 'red').length;
   document.getElementById('s-orange').textContent  = points.filter(p => p.color === 'orange').length;
