@@ -1629,29 +1629,57 @@ overlayCanvas.addEventListener('contextmenu', e => {
   const cx = e.clientX - canvasRect.left;
   const cy = e.clientY - canvasRect.top;
 
-  // Check pin first
+  // Pin
   const pin = pinAtXY(cx, cy);
-  if (pin) {
-    pins = pins.filter(p => p.feId !== pin.feId);
-    savePins(); renderSidebar(); drawOverlay();
-    setMsg('Deleted: ' + pin.address);
+  if (pin && pin.placed) {
+    ctxTarget = pin;
+    showCtxMenu(e.clientX, e.clientY, (pin.address || '—').substring(0, 24), [
+      { icon: 'ℹ',  label: 'View Detail',  action: 'pin-detail'  },
+      { icon: '↩',  label: 'Unplace Pin',  action: 'pin-unplace' },
+      { divider: true },
+      { icon: '🗑', label: 'Delete Pin',   action: 'pin-delete',  danger: true },
+    ]);
     return;
   }
-  // Check arrow
+
+  // Annotation (open bond, closed bond, valve)
+  const annot = annotAtXY(cx, cy);
+  if (annot) {
+    ctxTarget = annot;
+    const typeLabels = { 'open-bond':'Open Bonds', 'closed-bond':'Bonds (Closed)', 'valve':'Valve / No Bond' };
+    showCtxMenu(e.clientX, e.clientY, typeLabels[annot.type] || annot.type, [
+      { icon: 'ℹ',  label: 'View Info',  action: 'annot-info'   },
+      { divider: true },
+      { icon: '🗑', label: 'Delete',     action: 'annot-delete', danger: true },
+    ]);
+    return;
+  }
+
+  // Arrow
   const arr = arrowAtXY(cx, cy);
   if (arr) {
-    arrows = arrows.filter(a => a.id !== arr.id);
-    saveArrows(); drawOverlay();
-    setMsg('Arrow deleted.');
+    ctxTarget = arr;
+    const dirs = ['→ Right','↓ Down','← Left','↑ Up'];
+    showCtxMenu(e.clientX, e.clientY, 'Flow Arrow — ' + dirs[arr.dir], [
+      { icon: '↑', label: 'Face Up',       action: 'dir-up'       },
+      { icon: '↓', label: 'Face Down',     action: 'dir-down'     },
+      { icon: '←', label: 'Face Left',     action: 'dir-left'     },
+      { icon: '→', label: 'Face Right',    action: 'dir-right'    },
+      { divider: true },
+      { icon: '🗑', label: 'Delete Arrow', action: 'arrow-delete', danger: true },
+    ]);
     return;
   }
-  // Check rectifier
+
+  // Rectifier
   if (rectAtXY(cx, cy)) {
-    if (confirm('Delete the rectifier marker?')) {
-      rectifier = null;
-      saveRectifier(); drawOverlay(); updateRectStatus();
-      setMsg('Rectifier removed.');
-    }
+    ctxTarget = rectifier;
+    showCtxMenu(e.clientX, e.clientY, '⚡ Rectifier', [
+      { icon: 'ℹ',  label: 'View Info',         action: 'rect-info'    },
+      { icon: '✏', label: 'Edit Values',         action: 'rect-edit'   },
+      { divider: true },
+      { icon: '🗑', label: 'Delete Rectifier',   action: 'rect-delete', danger: true },
+    ]);
     return;
   }
 });
