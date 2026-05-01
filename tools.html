@@ -879,7 +879,6 @@ function scoreAmps(actual, expected) {
   else if (ratio > 0.60) return { color: 'green',    label: 'NORMAL',         ratio };
   else if (ratio > 0.30) return { color: 'blue',     label: 'LOW',            ratio };
   else                   return { color: 'blue-dim', label: 'CRITICALLY LOW', ratio };
-  else                  return { color: 'blue-dim', label: 'CRITICALLY LOW', ratio };
 }
 
 function colorVar(c) {
