@@ -11,6 +11,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CP Scout — Current Map</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root {
     --bg:          #3a3f44;
@@ -195,6 +196,54 @@
   ::-webkit-scrollbar { width: 5px; }
   ::-webkit-scrollbar-track { background: var(--surface); }
   ::-webkit-scrollbar-thumb { background: var(--border); }
+
+  /* ── GEOREFERENCING MODAL ── */
+  .geo-modal { position:fixed;inset:0;background:rgba(0,0,0,0.82);display:none;align-items:center;justify-content:center;z-index:300; }
+  .geo-modal.open { display:flex; }
+  .geo-box { background:var(--surface);border:1px solid var(--teal-dark);width:540px;max-width:96vw;max-height:90vh;overflow-y:auto;display:flex;flex-direction:column; }
+  .geo-hdr { background:var(--panel);padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0; }
+  .geo-hdr h3 { color:var(--teal);font-size:12px;letter-spacing:2px;text-transform:uppercase; }
+  .geo-hdr-close { background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:20px;line-height:1; }
+  .geo-hdr-close:hover { color:var(--text); }
+  .geo-body { padding:14px;display:flex;flex-direction:column;gap:12px; }
+  .geo-section { border:1px solid var(--border);background:var(--panel); }
+  .geo-sec-hdr { padding:7px 12px;background:var(--surface);border-bottom:1px solid var(--border);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--teal);font-weight:bold;display:flex;align-items:center;gap:8px; }
+  .geo-sec-num { background:var(--teal-dark);color:#fff;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:bold;flex-shrink:0; }
+  .geo-sec-body { padding:12px; }
+  .geo-info { font-size:10px;color:var(--text-dim);line-height:1.7;margin-bottom:10px; }
+  .geo-info strong { color:var(--teal); }
+  .geo-row { display:flex;gap:8px;align-items:center;margin-bottom:8px; }
+  .geo-pt-num { font-size:11px;color:var(--teal);font-weight:bold;width:20px;text-align:center;flex-shrink:0;cursor:pointer; }
+  .geo-pt-num.selected { color:#fff;background:var(--teal-dark);border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center; }
+  .geo-col { flex:1;display:flex;flex-direction:column;gap:3px; }
+  .geo-input { background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;font-size:11px;font-family:inherit;width:100%; }
+  .geo-input:focus { outline:none;border-color:var(--teal); }
+  .geo-xy-label { font-size:9px;color:var(--text-muted); }
+  .geo-xy-label.set { color:var(--teal); }
+  .geo-status { font-size:9px;width:64px;text-align:center;flex-shrink:0;padding:3px 4px; }
+  .geo-status.ok  { color:var(--green); }
+  .geo-status.err { color:var(--red); }
+  .geo-status.wait{ color:var(--yellow); }
+  .geo-matrix { font-size:10px;padding:8px 10px;border:1px solid;margin-top:8px; }
+  .geo-matrix.ready { border-color:var(--green);color:var(--green);background:rgba(10,122,48,0.1); }
+  .geo-matrix.bad   { border-color:var(--border);color:var(--text-muted); }
+  .geo-click-btn { width:100%;padding:7px;font-size:10px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;font-family:inherit;border:1px solid var(--teal-dark);background:rgba(77,217,232,0.07);color:var(--teal-dim);margin-bottom:10px;transition:all .15s; }
+  .geo-click-btn:hover,.geo-click-btn.active { background:rgba(77,217,232,0.18);border-color:var(--teal);color:var(--teal);font-weight:bold; }
+  .geo-hint { font-size:9px;color:var(--yellow);text-align:center;margin-bottom:8px;display:none; }
+  .geo-hint.show { display:block; }
+  .geo-btns { display:flex;gap:8px;flex-wrap:wrap;margin-top:4px; }
+  .geo-btn { padding:7px 14px;font-size:11px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;font-family:inherit;font-weight:bold;border:1px solid; }
+  .geo-btn.primary { background:var(--teal-dark);border-color:var(--teal);color:#fff; }
+  .geo-btn.primary:hover { background:var(--teal-dim); }
+  .geo-btn.secondary { background:var(--panel);border-color:var(--border);color:var(--text-dim); }
+  .geo-btn.secondary:hover { border-color:var(--teal);color:var(--teal); }
+  .geo-btn.danger { background:transparent;border-color:#a04040;color:#f08080; }
+  .geo-btn.danger:hover { background:#6a2020;color:#fff; }
+  .geo-btn:disabled { opacity:0.4;cursor:not-allowed; }
+  .geo-progress { font-size:10px;color:var(--teal);margin-top:8px;display:none;line-height:1.6; }
+  .geo-calib-trigger { width:100%;padding:6px;font-size:10px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;font-family:inherit;border:1px dashed var(--teal-dark);background:rgba(77,217,232,0.04);color:var(--teal-dim);margin-top:5px;transition:all .15s; }
+  .geo-calib-trigger:hover { background:rgba(77,217,232,0.12);border-color:var(--teal);color:var(--teal); }
+  .geo-calib-saved { font-size:9px;color:var(--green);margin-top:3px;text-align:center;display:none; }
 </style>
 </head>
 <body>
@@ -294,6 +343,8 @@
       <button class="apply-btn" onclick="loadFieldEntries()">↻ Load Field Entries</button>
       <button class="apply-btn secondary" style="margin-top:4px" onclick="clearMap()">✕ Clear Map</button>
       <button class="apply-btn secondary" style="margin-top:4px" onclick="window.location.href='field-entry.html'">→ Go to Field Entry</button>
+      <button class="geo-calib-trigger" onclick="openGeoModal()">⊕ Geo Calibration / Auto-Place</button>
+      <div class="geo-calib-saved" id="geo-calib-saved">✓ Calibration active</div>
     </div>
 
     <!-- Instructions (collapsible, open by default) -->
@@ -1746,6 +1797,13 @@ overlayCanvas.addEventListener('click', e => {
 
   // ── EMPTY MAP CLICK — mode-specific ───────────────────────────────────────
   closeCtxMenu();
+
+  // Geo calibration click intercept
+  if (geoClickActive) {
+    geoHandleMapClick(cx / scale, cy / scale);
+    return;
+  }
+
   if (mode === 'place') {
     if (!pdfDoc)              { setMsg('Upload a PDF map first.'); return; }
     if (!scale || scale <= 0) { setMsg('Map is still rendering — please wait.'); return; }
@@ -2021,6 +2079,456 @@ updatePinStatus();
   }
 })();
 </script>
+<!-- ── GEOREFERENCING MODAL ── -->
+<div class="geo-modal" id="geo-modal">
+  <div class="geo-box">
+    <div class="geo-hdr">
+      <h3>⊕ Geo Calibration — Current Map</h3>
+      <button class="geo-hdr-close" onclick="closeGeoModal()">×</button>
+    </div>
+    <div class="geo-body">
+
+      <!-- Step 1: API Key -->
+      <div class="geo-section">
+        <div class="geo-sec-hdr"><div class="geo-sec-num">1</div>Google Geocoding API Key</div>
+        <div class="geo-sec-body">
+          <p class="geo-info">Enter your Google Geocoding API key once. It is stored locally on this device only and sent only to Google's geocoding service.</p>
+          <div class="geo-row">
+            <input type="password" class="geo-input" id="geo-apikey" placeholder="AIza...">
+            <button class="geo-btn primary" onclick="geoSaveApiKey()">Save</button>
+          </div>
+          <div id="geo-apikey-status" style="font-size:9px;color:var(--text-muted);margin-top:2px"></div>
+        </div>
+      </div>
+
+      <!-- Step 2: Three Reference Points -->
+      <div class="geo-section">
+        <div class="geo-sec-hdr"><div class="geo-sec-num">2</div>Set Three Reference Points on the PDF Map</div>
+        <div class="geo-sec-body">
+          <p class="geo-info">
+            <strong>One-time setup per station PDF.</strong> Click a numbered point below to select it, then click <strong>Activate Click Mode</strong> and click the matching intersection on the PDF map. Enter the real-world street address for that intersection. Spread the three points across different areas of the map for best accuracy.
+          </p>
+          <button class="geo-click-btn" id="geo-click-btn" onclick="geoToggleClickMode()">▶ Activate Click Mode</button>
+          <div class="geo-hint" id="geo-hint">Click the intersection on the PDF map for Point <span id="geo-hint-num">1</span></div>
+
+          <!-- Point rows -->
+          <div id="geo-pt-rows"></div>
+
+          <div id="geo-matrix-msg" class="geo-matrix bad">Calibration incomplete — geocode all 3 points and set their map positions</div>
+        </div>
+      </div>
+
+      <!-- Step 3: Auto-place from spreadsheet -->
+      <div class="geo-section">
+        <div class="geo-sec-hdr"><div class="geo-sec-num">3</div>Auto-Place Pins from Spreadsheet</div>
+        <div class="geo-sec-body">
+          <p class="geo-info">Upload your Excel spreadsheet. The app reads the <strong>Location</strong> and <strong>City</strong> columns, geocodes each unique test point address, and places pins automatically. Addresses that cannot be geocoded stay unplaced for manual positioning.</p>
+          <div class="upload-zone" onclick="document.getElementById('geo-xlsx-input').click()">
+            <input type="file" id="geo-xlsx-input" accept=".xlsx,.xls,.csv" onchange="geoAutoPlace(this)">
+            <div class="uz-label">📊 Upload Spreadsheet for Auto-Placement</div>
+            <div class="uz-filename" id="geo-xlsx-name">No file selected</div>
+          </div>
+          <div class="geo-progress" id="geo-progress"></div>
+        </div>
+      </div>
+
+      <div class="geo-btns">
+        <button class="geo-btn primary" onclick="geoGeocodeAllPoints()">⊕ Geocode Reference Points</button>
+        <button class="geo-btn primary" id="geo-save-btn" onclick="geoSaveCalibration()" disabled>💾 Save Calibration</button>
+        <button class="geo-btn danger"  onclick="geoClearCalibration()">✕ Clear All</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════════════
+// GEOREFERENCING ENGINE — Current Map
+// ══════════════════════════════════════════════════════════════════════════════
+const GEO_CALIB_KEY  = 'cm_geo_calibration';   // affine matrix for this map
+const GEO_APIKEY_KEY = 'cp_scout_geo_apikey';   // shared across both maps
+const GEO_CACHE_KEY  = 'cp_geo_cache';          // shared geocode cache
+
+// 3 control points: { px, py } = PDF canvas coords; { lat, lng } = geocoded
+let geoPoints = [
+  { px: null, py: null, lat: null, lng: null, addr: '' },
+  { px: null, py: null, lat: null, lng: null, addr: '' },
+  { px: null, py: null, lat: null, lng: null, addr: '' },
+];
+let geoCalibMatrix   = null;   // saved affine transform
+let geoClickActive   = false;  // whether PDF click mode is on
+let geoSelectedPoint = 0;      // which point (0/1/2) next click sets
+
+// ── Load saved state ──────────────────────────────────────────────────────────
+function geoLoadState() {
+  // API key
+  const key = localStorage.getItem(GEO_APIKEY_KEY) || '';
+  if (key) {
+    document.getElementById('geo-apikey').value = key;
+    document.getElementById('geo-apikey-status').textContent = '✓ API key loaded';
+    document.getElementById('geo-apikey-status').style.color = 'var(--green)';
+  }
+  // Calibration
+  try {
+    const saved = JSON.parse(localStorage.getItem(GEO_CALIB_KEY) || 'null');
+    if (saved) {
+      geoCalibMatrix = saved.matrix;
+      geoPoints      = saved.points;
+      document.getElementById('geo-calib-saved').style.display = 'block';
+    }
+  } catch(e) {}
+  geoRenderPointRows();
+  geoCheckMatrix();
+}
+
+// ── Render point rows ─────────────────────────────────────────────────────────
+function geoRenderPointRows() {
+  const labels = ['①','②','③'];
+  document.getElementById('geo-pt-rows').innerHTML = geoPoints.map((pt, i) => {
+    const isSelected = (i === geoSelectedPoint && geoClickActive);
+    const hasXY  = pt.px !== null;
+    const hasGeo = pt.lat !== null;
+    const xyText = hasXY
+      ? `✓ Map point set (${Math.round(pt.px)}, ${Math.round(pt.py)})`
+      : 'No map point — activate click mode then click PDF';
+    const statusText = hasGeo ? '✓ OK' : (pt.addr ? 'Not geocoded' : '—');
+    const statusCls  = hasGeo ? 'ok' : (pt.addr ? 'wait' : '');
+    return `
+      <div class="geo-row">
+        <div class="geo-pt-num${isSelected?' selected':''}" onclick="geoSelectPoint(${i})" title="Select point ${i+1}">${labels[i]}</div>
+        <div class="geo-col">
+          <input type="text" class="geo-input" id="geo-addr-${i}"
+            value="${pt.addr.replace(/"/g,'&quot;')}"
+            placeholder="e.g. Main St &amp; 5th Ave, San Diego, CA"
+            oninput="geoPoints[${i}].addr=this.value;geoPoints[${i}].lat=null;geoPoints[${i}].lng=null;geoCheckMatrix()">
+          <div class="geo-xy-label${hasXY?' set':''}" id="geo-xy-${i}">${xyText}</div>
+        </div>
+        <div class="geo-status ${statusCls}" id="geo-status-${i}">${statusText}</div>
+      </div>`;
+  }).join('');
+}
+
+function geoSelectPoint(i) {
+  geoSelectedPoint = i;
+  if (geoClickActive) {
+    document.getElementById('geo-hint-num').textContent = i + 1;
+  }
+  geoRenderPointRows();
+}
+
+// ── API Key ───────────────────────────────────────────────────────────────────
+function geoSaveApiKey() {
+  const key = document.getElementById('geo-apikey').value.trim();
+  if (!key) return;
+  localStorage.setItem(GEO_APIKEY_KEY, key);
+  document.getElementById('geo-apikey-status').textContent = '✓ API key saved';
+  document.getElementById('geo-apikey-status').style.color = 'var(--green)';
+}
+
+function geoGetApiKey() {
+  return localStorage.getItem(GEO_APIKEY_KEY) || document.getElementById('geo-apikey').value.trim();
+}
+
+// ── Click Mode ────────────────────────────────────────────────────────────────
+function geoToggleClickMode() {
+  geoClickActive = !geoClickActive;
+  const btn  = document.getElementById('geo-click-btn');
+  const hint = document.getElementById('geo-hint');
+  if (geoClickActive) {
+    btn.textContent = '■ Deactivate Click Mode';
+    btn.classList.add('active');
+    hint.classList.add('show');
+    document.getElementById('geo-hint-num').textContent = geoSelectedPoint + 1;
+    setMsg('GEO: Click the PDF map to set Point ' + (geoSelectedPoint + 1));
+  } else {
+    btn.textContent = '▶ Activate Click Mode';
+    btn.classList.remove('active');
+    hint.classList.remove('show');
+    setMsg('Click mode deactivated.');
+  }
+  geoRenderPointRows();
+}
+
+// Called from overlayCanvas click handler when geo click mode is active
+function geoHandleMapClick(logicalX, logicalY) {
+  geoPoints[geoSelectedPoint].px = logicalX;
+  geoPoints[geoSelectedPoint].py = logicalY;
+  const labels = ['①','②','③'];
+  setMsg(`GEO: Point ${labels[geoSelectedPoint]} map position set. Now enter its street address and geocode.`);
+
+  // Auto-advance to next unset point
+  for (let i = 0; i < 3; i++) {
+    const next = (geoSelectedPoint + 1 + i) % 3;
+    if (geoPoints[next].px === null) {
+      geoSelectedPoint = next;
+      document.getElementById('geo-hint-num').textContent = next + 1;
+      break;
+    }
+  }
+  geoRenderPointRows();
+  geoCheckMatrix();
+}
+
+// ── Geocoding ─────────────────────────────────────────────────────────────────
+async function geoGeocodeAddress(address) {
+  // Check cache first
+  let cache = {};
+  try { cache = JSON.parse(localStorage.getItem(GEO_CACHE_KEY) || '{}'); } catch(e) {}
+  if (cache[address]) return cache[address];
+
+  const apiKey = geoGetApiKey();
+  if (!apiKey) throw new Error('No API key set — enter your Google Geocoding API key in Step 1.');
+
+  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error('Network error: ' + resp.status);
+  const data = await resp.json();
+  if (data.status !== 'OK' || !data.results.length) {
+    throw new Error(data.status === 'ZERO_RESULTS' ? 'Address not found' : data.status);
+  }
+  const loc = data.results[0].geometry.location;
+  // Save to cache
+  cache[address] = { lat: loc.lat, lng: loc.lng };
+  try { localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(cache)); } catch(e) {}
+  return { lat: loc.lat, lng: loc.lng };
+}
+
+async function geoGeocodeAllPoints() {
+  const apiKey = geoGetApiKey();
+  if (!apiKey) {
+    alert('Enter your Google Geocoding API key in Step 1 first.');
+    return;
+  }
+  for (let i = 0; i < 3; i++) {
+    const addr = geoPoints[i].addr.trim();
+    if (!addr) continue;
+    const statusEl = document.getElementById('geo-status-' + i);
+    if (statusEl) { statusEl.textContent = '…'; statusEl.className = 'geo-status wait'; }
+    try {
+      const result = await geoGeocodeAddress(addr);
+      geoPoints[i].lat = result.lat;
+      geoPoints[i].lng = result.lng;
+      if (statusEl) { statusEl.textContent = '✓ OK'; statusEl.className = 'geo-status ok'; }
+    } catch(err) {
+      if (statusEl) { statusEl.textContent = '✗ Error'; statusEl.className = 'geo-status err'; }
+      setMsg('Geocode error for point ' + (i+1) + ': ' + err.message);
+    }
+  }
+  geoCheckMatrix();
+}
+
+// ── Affine Transform ──────────────────────────────────────────────────────────
+// Solves for 6-parameter affine: [px, py] = A * [lng, lat, 1]
+// Using least-squares with 3 control point pairs
+function geoComputeMatrix(points) {
+  // We need all 3 points to have both pixel coords AND geocoded lat/lng
+  const valid = points.filter(p => p.px !== null && p.lat !== null);
+  if (valid.length < 3) return null;
+
+  // Set up system: px = a*lng + b*lat + c,  py = d*lng + e*lat + f
+  // Build 3x3 system for each
+  const A = valid.slice(0,3).map(p => [p.lng, p.lat, 1]);
+  const bx = valid.slice(0,3).map(p => p.px);
+  const by = valid.slice(0,3).map(p => p.py);
+
+  const coeffX = geoSolve3x3(A, bx);
+  const coeffY = geoSolve3x3(A, by);
+  if (!coeffX || !coeffY) return null;
+
+  return { ax: coeffX[0], bx: coeffX[1], cx: coeffX[2],
+           ay: coeffY[0], by: coeffY[1], cy: coeffY[2] };
+}
+
+function geoSolve3x3(A, b) {
+  // Cramer's rule for 3x3
+  const det = (m) =>
+    m[0][0]*(m[1][1]*m[2][2]-m[1][2]*m[2][1])
+   -m[0][1]*(m[1][0]*m[2][2]-m[1][2]*m[2][0])
+   +m[0][2]*(m[1][0]*m[2][1]-m[1][1]*m[2][0]);
+
+  const D = det(A);
+  if (Math.abs(D) < 1e-10) return null;
+
+  return [0,1,2].map(col => {
+    const M = A.map((row,r) => row.map((v,c) => c===col ? b[r] : v));
+    return det(M) / D;
+  });
+}
+
+function geoLatLngToPixel(lat, lng, matrix) {
+  if (!matrix) return null;
+  const px = matrix.ax * lng + matrix.bx * lat + matrix.cx;
+  const py = matrix.ay * lng + matrix.by * lat + matrix.cy;
+  return { x: px, y: py };
+}
+
+// ── Check if calibration is complete ─────────────────────────────────────────
+function geoCheckMatrix() {
+  const matrix = geoComputeMatrix(geoPoints);
+  const msgEl  = document.getElementById('geo-matrix-msg');
+  const saveBtn = document.getElementById('geo-save-btn');
+  if (matrix) {
+    geoCalibMatrix = matrix;
+    if (msgEl) { msgEl.textContent = '✓ Calibration ready — 3 control points solved'; msgEl.className = 'geo-matrix ready'; }
+    if (saveBtn) saveBtn.disabled = false;
+  } else {
+    geoCalibMatrix = null;
+    const missing = geoPoints.filter(p => p.px === null || p.lat === null).length;
+    if (msgEl) { msgEl.textContent = `Calibration incomplete — ${missing} point(s) still need map click and geocoding`; msgEl.className = 'geo-matrix bad'; }
+    if (saveBtn) saveBtn.disabled = true;
+  }
+}
+
+// ── Save / Clear Calibration ──────────────────────────────────────────────────
+function geoSaveCalibration() {
+  if (!geoCalibMatrix) { alert('Calibration not ready — geocode all 3 points and set their map positions.'); return; }
+  localStorage.setItem(GEO_CALIB_KEY, JSON.stringify({ matrix: geoCalibMatrix, points: geoPoints }));
+  document.getElementById('geo-calib-saved').style.display = 'block';
+  setMsg('✓ Geo calibration saved for this station.');
+}
+
+function geoClearCalibration() {
+  if (!confirm('Clear all calibration data and geocode cache for this map?')) return;
+  localStorage.removeItem(GEO_CALIB_KEY);
+  localStorage.removeItem(GEO_CACHE_KEY);
+  geoPoints      = [{px:null,py:null,lat:null,lng:null,addr:''},{px:null,py:null,lat:null,lng:null,addr:''},{px:null,py:null,lat:null,lng:null,addr:''}];
+  geoCalibMatrix = null;
+  document.getElementById('geo-calib-saved').style.display = 'none';
+  geoRenderPointRows();
+  geoCheckMatrix();
+  setMsg('Calibration cleared.');
+}
+
+// ── Auto-Place from Spreadsheet ───────────────────────────────────────────────
+async function geoAutoPlace(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const apiKey = geoGetApiKey();
+  if (!apiKey) { alert('Enter your Google Geocoding API key in Step 1 first.'); return; }
+  if (!geoCalibMatrix) { alert('Save calibration first (Step 2) before auto-placing pins.'); return; }
+  if (!pdfDoc) { alert('Upload the station PDF map before auto-placing pins.'); return; }
+
+  document.getElementById('geo-xlsx-name').textContent = file.name;
+  const progressEl = document.getElementById('geo-progress');
+  progressEl.style.display = 'block';
+  progressEl.textContent = 'Reading spreadsheet…';
+
+  try {
+    // Read file
+    const buf  = await file.arrayBuffer();
+    const wb   = XLSX.read(buf, { type: 'array' });
+    const ws   = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+    if (!rows.length) { progressEl.textContent = 'No data found in spreadsheet.'; return; }
+
+    // Detect columns — flexible header matching
+    const headers = Object.keys(rows[0]).map(h => h.toLowerCase().trim());
+    const locIdx  = headers.findIndex(h => h === 'location' || h.includes('locat'));
+    const cityIdx = headers.findIndex(h => h === 'city' || h.includes('city'));
+    const ptIdx   = headers.findIndex(h => h === 'point' || h.includes('point') || h.includes('tp'));
+
+    if (locIdx === -1) { progressEl.textContent = '✗ Could not find a "Location" column in the spreadsheet.'; return; }
+
+    const locKey  = Object.keys(rows[0])[locIdx];
+    const cityKey = cityIdx > -1 ? Object.keys(rows[0])[cityIdx] : null;
+    const ptKey   = ptIdx  > -1 ? Object.keys(rows[0])[ptIdx]   : null;
+
+    // Build unique address → test point mapping
+    const addrMap = new Map(); // address → [{ ptId, rowData }]
+    for (const row of rows) {
+      const loc  = String(row[locKey] || '').trim();
+      const city = cityKey ? String(row[cityKey] || '').trim() : 'San Diego, CA';
+      const pt   = ptKey   ? String(row[ptKey]   || '').trim() : '';
+      if (!loc) continue;
+      const fullAddr = loc + ', ' + city;
+      if (!addrMap.has(fullAddr)) addrMap.set(fullAddr, []);
+      if (pt && !addrMap.get(fullAddr).find(e => e.pt === pt)) {
+        addrMap.get(fullAddr).push({ pt, fullAddr });
+      }
+    }
+
+    // Geocode each unique address and place pins
+    let placed = 0, skipped = 0, failed = 0;
+    const total = addrMap.size;
+    let done = 0;
+
+    for (const [addr, entries] of addrMap) {
+      done++;
+      progressEl.textContent = `Geocoding ${done}/${total}: ${addr.substring(0, 50)}…`;
+      try {
+        const geo = await geoGeocodeAddress(addr);
+        const pixel = geoLatLngToPixel(geo.lat, geo.lng, geoCalibMatrix);
+        if (!pixel) { failed++; continue; }
+
+        // Place or update each pin at this address
+        for (const entry of entries) {
+          // Find matching pin by address substring match
+          const match = pins.find(p =>
+            !p.placed &&
+            p.address &&
+            (p.address.toLowerCase().includes(addr.split(',')[0].toLowerCase().trim()) ||
+             addr.toLowerCase().includes(p.address.toLowerCase().trim()))
+          );
+          if (match) {
+            match.placed = true;
+            match.x = pixel.x;
+            match.y = pixel.y;
+            placed++;
+          }
+        }
+      } catch(err) {
+        failed++;
+        console.warn('[GEO] Failed to geocode:', addr, err.message);
+        // Flag as non-geocodable — mark address in progress
+        progressEl.textContent += ' ✗';
+      }
+      // Small delay to avoid rate limiting
+      await new Promise(r => setTimeout(r, 120));
+    }
+
+    savePins(); renderSidebar(); drawOverlay();
+    const unplaced = pins.filter(p => !p.placed).length;
+    progressEl.textContent = `✓ Done — ${placed} pin(s) auto-placed, ${failed} address(es) failed geocoding, ${unplaced} still unplaced (manual placement needed).`;
+    setMsg(`✓ Auto-placement complete: ${placed} placed, ${unplaced} need manual placement.`);
+
+  } catch(err) {
+    progressEl.textContent = '✗ Error: ' + err.message;
+    console.error('[GEO] Auto-place error:', err);
+  }
+}
+
+// ── Modal Open / Close ────────────────────────────────────────────────────────
+function openGeoModal() {
+  geoLoadState();
+  document.getElementById('geo-modal').classList.add('open');
+}
+
+function closeGeoModal() {
+  // Deactivate click mode when closing
+  if (geoClickActive) geoToggleClickMode();
+  document.getElementById('geo-modal').classList.remove('open');
+}
+
+// Close modal on background click
+document.getElementById('geo-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('geo-modal')) closeGeoModal();
+});
+
+// ── Show calibration badge on load ───────────────────────────────────────────
+(function geoInitBadge() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(GEO_CALIB_KEY) || 'null');
+    if (saved && saved.matrix) {
+      geoCalibMatrix = saved.matrix;
+      geoPoints      = saved.points;
+      document.getElementById('geo-calib-saved').style.display = 'block';
+    }
+  } catch(e) {}
+})();
+</script>
+
 <script>
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
