@@ -244,6 +244,14 @@
   .geo-calib-trigger { width:100%;padding:6px;font-size:10px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;font-family:inherit;border:1px dashed var(--teal-dark);background:rgba(77,217,232,0.04);color:var(--teal-dim);margin-top:5px;transition:all .15s; }
   .geo-calib-trigger:hover { background:rgba(77,217,232,0.12);border-color:var(--teal);color:var(--teal); }
   .geo-calib-saved { font-size:9px;color:var(--green);margin-top:3px;text-align:center;display:none; }
+
+  /* Minimized geo bar — floats over map during click mode */
+  .geo-minimized-bar { position:fixed;bottom:60px;left:50%;transform:translateX(-50%);background:var(--surface);border:2px solid var(--teal);padding:10px 20px;z-index:400;display:none;align-items:center;gap:14px;box-shadow:0 4px 20px rgba(0,0,0,0.7); }
+  .geo-minimized-bar.show { display:flex; }
+  .geo-mini-label { font-size:11px;color:var(--teal);letter-spacing:1px;text-transform:uppercase;font-weight:bold; }
+  .geo-mini-point { font-size:13px;color:#fff;font-weight:bold; }
+  .geo-mini-btn { padding:6px 14px;font-size:10px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;font-family:inherit;font-weight:bold;border:1px solid var(--border);background:var(--panel);color:var(--text-dim); }
+  .geo-mini-btn:hover { border-color:var(--teal);color:var(--teal); }
 </style>
 </head>
 <body>
@@ -2141,6 +2149,14 @@ updatePinStatus();
   </div>
 </div>
 
+<!-- Floating bar shown when geo click mode is active and modal is minimized -->
+<div class="geo-minimized-bar" id="geo-minimized-bar">
+  <span class="geo-mini-label">⊕ Click PDF map to set</span>
+  <span class="geo-mini-point" id="geo-mini-point-label">Point ①</span>
+  <button class="geo-mini-btn" onclick="geoNextPoint()">→ Next Point</button>
+  <button class="geo-mini-btn" onclick="geoRestoreModal()">↩ Back to Calibration</button>
+</div>
+
 <script>
 // ══════════════════════════════════════════════════════════════════════════════
 // GEOREFERENCING ENGINE — Current Map
@@ -2239,14 +2255,53 @@ function geoToggleClickMode() {
     btn.classList.add('active');
     hint.classList.add('show');
     document.getElementById('geo-hint-num').textContent = geoSelectedPoint + 1;
-    setMsg('GEO: Click the PDF map to set Point ' + (geoSelectedPoint + 1));
+    // Minimize modal — hide it and show floating bar instead
+    document.getElementById('geo-modal').classList.remove('open');
+    geoUpdateMiniBar();
+    document.getElementById('geo-minimized-bar').classList.add('show');
+    setMsg('GEO: Click the PDF map to set Point ' + (geoSelectedPoint + 1) + '. Use the bar below to navigate points or return to calibration.');
   } else {
     btn.textContent = '▶ Activate Click Mode';
     btn.classList.remove('active');
     hint.classList.remove('show');
+    // Restore modal, hide floating bar
+    document.getElementById('geo-minimized-bar').classList.remove('show');
+    document.getElementById('geo-modal').classList.add('open');
     setMsg('Click mode deactivated.');
   }
   geoRenderPointRows();
+}
+
+function geoUpdateMiniBar() {
+  const labels = ['①','②','③'];
+  const el = document.getElementById('geo-mini-point-label');
+  if (el) el.textContent = 'Point ' + (labels[geoSelectedPoint] || (geoSelectedPoint + 1));
+}
+
+function geoNextPoint() {
+  // Advance to next unset point, or just cycle
+  for (let i = 1; i <= 3; i++) {
+    const next = (geoSelectedPoint + i) % 3;
+    if (geoPoints[next].px === null) { geoSelectedPoint = next; geoUpdateMiniBar(); setMsg('GEO: Now click PDF map to set Point ' + (next + 1)); return; }
+  }
+  // All set — just cycle
+  geoSelectedPoint = (geoSelectedPoint + 1) % 3;
+  geoUpdateMiniBar();
+  setMsg('GEO: Now clicking for Point ' + (geoSelectedPoint + 1));
+}
+
+function geoRestoreModal() {
+  // Deactivate click mode and reopen modal
+  geoClickActive = false;
+  const btn = document.getElementById('geo-click-btn');
+  const hint = document.getElementById('geo-hint');
+  if (btn) { btn.textContent = '▶ Activate Click Mode'; btn.classList.remove('active'); }
+  if (hint) hint.classList.remove('show');
+  document.getElementById('geo-minimized-bar').classList.remove('show');
+  document.getElementById('geo-modal').classList.add('open');
+  geoRenderPointRows();
+  geoCheckMatrix();
+  setMsg('Returned to calibration panel.');
 }
 
 // Called from overlayCanvas click handler when geo click mode is active
@@ -2254,17 +2309,17 @@ function geoHandleMapClick(logicalX, logicalY) {
   geoPoints[geoSelectedPoint].px = logicalX;
   geoPoints[geoSelectedPoint].py = logicalY;
   const labels = ['①','②','③'];
-  setMsg(`GEO: Point ${labels[geoSelectedPoint]} map position set. Now enter its street address and geocode.`);
+  setMsg(`GEO: Point ${labels[geoSelectedPoint]} map position set. Click Next Point or ↩ Back to Calibration to enter the address.`);
 
   // Auto-advance to next unset point
   for (let i = 0; i < 3; i++) {
     const next = (geoSelectedPoint + 1 + i) % 3;
     if (geoPoints[next].px === null) {
       geoSelectedPoint = next;
-      document.getElementById('geo-hint-num').textContent = next + 1;
       break;
     }
   }
+  geoUpdateMiniBar();
   geoRenderPointRows();
   geoCheckMatrix();
 }
