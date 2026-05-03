@@ -2149,10 +2149,15 @@ updatePinStatus();
   </div>
 </div>
 
-<!-- Floating bar shown when geo click mode is active and modal is minimized -->
+<!-- Floating bar shown when geo click mode is active -->
 <div class="geo-minimized-bar" id="geo-minimized-bar">
-  <span class="geo-mini-label">⊕ Click PDF map to set</span>
-  <span class="geo-mini-point" id="geo-mini-point-label">Point ①</span>
+  <div style="display:flex;flex-direction:column;gap:3px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span class="geo-mini-label">⊕ Click PDF map to set</span>
+      <span class="geo-mini-point" id="geo-mini-point-label">Point ①</span>
+    </div>
+    <div id="geo-mini-addr" style="font-size:10px;color:var(--teal);letter-spacing:0.5px;font-style:italic;max-width:420px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">No address entered yet — go Back to Calibration to enter address</div>
+  </div>
   <button class="geo-mini-btn" onclick="geoNextPoint()">→ Next Point</button>
   <button class="geo-mini-btn" onclick="geoRestoreModal()">↩ Back to Calibration</button>
 </div>
@@ -2274,20 +2279,37 @@ function geoToggleClickMode() {
 
 function geoUpdateMiniBar() {
   const labels = ['①','②','③'];
-  const el = document.getElementById('geo-mini-point-label');
-  if (el) el.textContent = 'Point ' + (labels[geoSelectedPoint] || (geoSelectedPoint + 1));
+  const ptEl   = document.getElementById('geo-mini-point-label');
+  const addrEl = document.getElementById('geo-mini-addr');
+  if (ptEl) ptEl.textContent = 'Point ' + (labels[geoSelectedPoint] || (geoSelectedPoint + 1));
+  if (addrEl) {
+    const addr = geoPoints[geoSelectedPoint].addr.trim();
+    const hasXY = geoPoints[geoSelectedPoint].px !== null;
+    if (addr) {
+      addrEl.textContent = (hasXY ? '✓ Map point set — ' : '⬡ Map point not yet set — ') + addr;
+      addrEl.style.color = hasXY ? 'var(--green)' : 'var(--yellow)';
+    } else {
+      addrEl.textContent = 'No address entered yet — go Back to Calibration to enter address first';
+      addrEl.style.color = 'var(--text-muted)';
+    }
+  }
 }
 
 function geoNextPoint() {
   // Advance to next unset point, or just cycle
   for (let i = 1; i <= 3; i++) {
     const next = (geoSelectedPoint + i) % 3;
-    if (geoPoints[next].px === null) { geoSelectedPoint = next; geoUpdateMiniBar(); setMsg('GEO: Now click PDF map to set Point ' + (next + 1)); return; }
+    if (geoPoints[next].px === null) {
+      geoSelectedPoint = next;
+      geoUpdateMiniBar();
+      setMsg('GEO: Now click PDF map to set Point ' + (next + 1) + (geoPoints[next].addr ? ' — ' + geoPoints[next].addr : ' — enter address in calibration panel first'));
+      return;
+    }
   }
   // All set — just cycle
   geoSelectedPoint = (geoSelectedPoint + 1) % 3;
   geoUpdateMiniBar();
-  setMsg('GEO: Now clicking for Point ' + (geoSelectedPoint + 1));
+  setMsg('GEO: All points set. Use ↩ Back to Calibration to geocode and save.');
 }
 
 function geoRestoreModal() {
