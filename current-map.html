@@ -857,8 +857,66 @@ function drawOverlay() {
   // Draw rectifier
   if (rectifier && rectifier.x && rectifier.y) drawRectifier();
 
+  // Draw geo calibration markers if any points are set
+  if (typeof geoPoints !== 'undefined') drawGeoCalibMarkers();
+
   document.getElementById('sb-pins').textContent   = placedPins.length;
   document.getElementById('pin-count').textContent = pins.length;
+}
+
+function drawGeoCalibMarkers() {
+  const labels = ['①','②','③'];
+  const colors = ['#ff6b35','#f7c59f','#efefd0']; // distinct per point
+  for (let i = 0; i < geoPoints.length; i++) {
+    const pt = geoPoints[i];
+    if (pt.px === null) continue;
+    const sx = pt.px * scale;
+    const sy = pt.py * scale;
+    const r  = 10 * scale;
+
+    // Crosshair lines
+    overlayCtx.save();
+    overlayCtx.strokeStyle = colors[i];
+    overlayCtx.lineWidth   = Math.max(1, 1.5 * scale);
+    overlayCtx.setLineDash([3 * scale, 2 * scale]);
+    overlayCtx.beginPath();
+    overlayCtx.moveTo(sx - r * 2, sy); overlayCtx.lineTo(sx + r * 2, sy);
+    overlayCtx.moveTo(sx, sy - r * 2); overlayCtx.lineTo(sx, sy + r * 2);
+    overlayCtx.stroke();
+    overlayCtx.setLineDash([]);
+
+    // Circle marker
+    overlayCtx.beginPath();
+    overlayCtx.arc(sx, sy, r, 0, Math.PI * 2);
+    overlayCtx.fillStyle   = colors[i] + '33';
+    overlayCtx.fill();
+    overlayCtx.strokeStyle = colors[i];
+    overlayCtx.lineWidth   = Math.max(1.5, 2 * scale);
+    overlayCtx.stroke();
+
+    // Point number label
+    const fs = Math.max(8, 9 * scale);
+    overlayCtx.font         = `bold ${fs}px Courier New`;
+    overlayCtx.textAlign    = 'center';
+    overlayCtx.textBaseline = 'middle';
+    overlayCtx.fillStyle    = colors[i];
+    overlayCtx.shadowColor  = 'rgba(0,0,0,0.9)';
+    overlayCtx.shadowBlur   = 3;
+    overlayCtx.fillText(labels[i], sx, sy);
+
+    // Address label below marker
+    if (pt.addr) {
+      const shortAddr = pt.addr.length > 30 ? pt.addr.substring(0, 28) + '…' : pt.addr;
+      const lfs = Math.max(7, 7.5 * scale);
+      overlayCtx.font         = `${lfs}px Courier New`;
+      overlayCtx.textBaseline = 'top';
+      overlayCtx.fillStyle    = colors[i];
+      overlayCtx.shadowBlur   = 4;
+      overlayCtx.fillText(shortAddr, sx, sy + r + 3);
+    }
+    overlayCtx.shadowBlur = 0;
+    overlayCtx.restore();
+  }
 }
 
 // ── DRAW ARROW ────────────────────────────────────────────────────────────────
@@ -2205,6 +2263,7 @@ function geoLoadState() {
 // ── Render point rows ─────────────────────────────────────────────────────────
 function geoRenderPointRows() {
   const labels = ['①','②','③'];
+  const colors = ['#ff6b35','#f7c59f','#efefd0'];
   document.getElementById('geo-pt-rows').innerHTML = geoPoints.map((pt, i) => {
     const isSelected = (i === geoSelectedPoint && geoClickActive);
     const hasXY  = pt.px !== null;
@@ -2214,15 +2273,20 @@ function geoRenderPointRows() {
       : 'No map point — activate click mode then click PDF';
     const statusText = hasGeo ? '✓ OK' : (pt.addr ? 'Not geocoded' : '—');
     const statusCls  = hasGeo ? 'ok' : (pt.addr ? 'wait' : '');
+    const dotStyle   = `display:inline-block;width:8px;height:8px;border-radius:50%;background:${colors[i]};margin-right:4px;flex-shrink:0`;
     return `
-      <div class="geo-row">
-        <div class="geo-pt-num${isSelected?' selected':''}" onclick="geoSelectPoint(${i})" title="Select point ${i+1}">${labels[i]}</div>
+      <div class="geo-row" style="align-items:flex-start;margin-bottom:10px">
+        <div class="geo-pt-num${isSelected?' selected':''}" onclick="geoSelectPoint(${i})" title="Select point ${i+1}" style="margin-top:6px"><span style="${dotStyle}"></span>${labels[i]}</div>
         <div class="geo-col">
           <input type="text" class="geo-input" id="geo-addr-${i}"
             value="${pt.addr.replace(/"/g,'&quot;')}"
             placeholder="e.g. Main St &amp; 5th Ave, San Diego, CA"
-            oninput="geoPoints[${i}].addr=this.value;geoPoints[${i}].lat=null;geoPoints[${i}].lng=null;geoCheckMatrix()">
-          <div class="geo-xy-label${hasXY?' set':''}" id="geo-xy-${i}">${xyText}</div>
+            oninput="geoPoints[${i}].addr=this.value;geoPoints[${i}].lat=null;geoPoints[${i}].lng=null;geoCheckMatrix();drawOverlay()">
+          <div style="display:flex;align-items:center;gap:8px;margin-top:3px;flex-wrap:wrap">
+            <div class="geo-xy-label${hasXY?' set':''}" id="geo-xy-${i}">${xyText}</div>
+            ${hasXY ? `<button onclick="geoReClickPoint(${i})" style="font-size:9px;padding:2px 7px;background:var(--panel);border:1px solid var(--border);color:var(--text-muted);cursor:pointer;font-family:inherit;letter-spacing:0.5px" title="Re-click this point on the map to correct its position">↺ Re-click</button>
+            <button onclick="geoClearPoint(${i})" style="font-size:9px;padding:2px 7px;background:transparent;border:1px solid #a04040;color:#f08080;cursor:pointer;font-family:inherit;letter-spacing:0.5px" title="Clear this point">✕</button>` : ''}
+          </div>
         </div>
         <div class="geo-status ${statusCls}" id="geo-status-${i}">${statusText}</div>
       </div>`;
@@ -2235,6 +2299,24 @@ function geoSelectPoint(i) {
     document.getElementById('geo-hint-num').textContent = i + 1;
   }
   geoRenderPointRows();
+}
+
+function geoReClickPoint(i) {
+  // Select this point and activate click mode so user can re-place it
+  geoSelectedPoint = i;
+  if (!geoClickActive) geoToggleClickMode();
+  else { geoUpdateMiniBar(); setMsg('GEO: Click the map to update Point ' + (i + 1) + ' position.'); }
+}
+
+function geoClearPoint(i) {
+  geoPoints[i].px  = null;
+  geoPoints[i].py  = null;
+  geoPoints[i].lat = null;
+  geoPoints[i].lng = null;
+  geoRenderPointRows();
+  geoCheckMatrix();
+  drawOverlay();
+  setMsg('GEO: Point ' + (i + 1) + ' cleared — activate click mode to re-set it.');
 }
 
 // ── API Key ───────────────────────────────────────────────────────────────────
@@ -2344,7 +2426,7 @@ function geoHandleMapClick(logicalX, logicalY) {
   geoUpdateMiniBar();
   geoRenderPointRows();
   geoCheckMatrix();
-}
+  drawOverlay(); // show updated marker positions on PDF
 
 // ── Geocoding ─────────────────────────────────────────────────────────────────
 async function geoGeocodeAddress(address) {
