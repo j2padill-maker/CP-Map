@@ -2764,8 +2764,8 @@ async function geoAutoPlaceFromFieldEntries() {
       if (!pixel) { failed += pinsForAddr.length; continue; }
 
       // Check pixel is within reasonable bounds of the PDF canvas
-      const maxX = pdfCanvas ? pdfCanvas.width  / 2 : 9999;
-      const maxY = pdfCanvas ? pdfCanvas.height / 2 : 9999;
+      const maxX = overlayCanvas ? overlayCanvas.width  / 2 : 9999;
+      const maxY = overlayCanvas ? overlayCanvas.height / 2 : 9999;
       if (pixel.x < 0 || pixel.y < 0 || pixel.x > maxX || pixel.y > maxY) {
         failed += pinsForAddr.length;
         console.warn('[GEO] Pixel out of bounds for:', addr, pixel);
