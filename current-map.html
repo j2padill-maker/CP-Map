@@ -2692,6 +2692,11 @@ async function geoAutoPlaceFromFieldEntries() {
 
   const progressEl = document.getElementById('geo-fe-progress');
   progressEl.style.display = 'block';
+  progressEl.textContent = 'Preparing addresses…';
+
+  // Clear geocode cache so previously failed addresses get a fresh attempt
+  // with the normalized format
+  try { localStorage.removeItem(GEO_CACHE_KEY); } catch(e) {}
 
   // Load field entries
   let entries = [];
@@ -2719,23 +2724,40 @@ async function geoAutoPlaceFromFieldEntries() {
 
   let placed = 0, failed = 0, done = 0;
 
-  // Group by unique address to minimize API calls
+  // ── Smart address normalizer ──────────────────────────────────────────────
+  function normalizeAddr(raw) {
+    let a = raw.trim();
+
+    // For drop checks with range format "X → Y", use start address only
+    if (a.includes('→')) a = a.split('→')[0].trim();
+
+    // Replace " and " with " & " for intersection format Google prefers
+    a = a.replace(/\s+and\s+/gi, ' & ');
+
+    // Capitalize each word
+    a = a.replace(/\b\w/g, c => c.toUpperCase());
+
+    // Append San Diego, CA if no city/state present
+    if (!/san diego|chula vista|national city|imperial beach|CA\b/i.test(a)) {
+      a = a + ', San Diego, CA';
+    }
+
+    return a;
+  }
+
+  // Group by unique normalized address to minimize API calls
   const addrMap = new Map();
   for (const pin of toPlace) {
     const addr = pin.address.trim();
     if (!addr) continue;
-    // For drop checks with range format "X → Y", extract start address
-    const cleanAddr = addr.includes('→') ? addr.split('→')[0].trim() : addr;
-    // Append city if not already present
-    const fullAddr = /san diego|chula vista|national city|imperial beach/i.test(cleanAddr)
-      ? cleanAddr : cleanAddr + ', San Diego, CA';
+    const fullAddr = normalizeAddr(addr);
     if (!addrMap.has(fullAddr)) addrMap.set(fullAddr, []);
     addrMap.get(fullAddr).push(pin);
   }
 
   for (const [addr, pinsForAddr] of addrMap) {
     done++;
-    progressEl.textContent = `Geocoding ${done}/${addrMap.size}: ${addr.substring(0, 45)}…`;
+    progressEl.textContent = `Geocoding ${done}/${addrMap.size}: ${addr.substring(0, 50)}…`;
     try {
       const geo   = await geoGeocodeAddress(addr);
       const pixel = geoLatLngToPixel(geo.lat, geo.lng, geoCalibMatrix);
@@ -2781,7 +2803,6 @@ function closeGeoModal() {
   document.getElementById('geo-modal').classList.remove('open');
 }
 
-// Close modal on background click
 document.getElementById('geo-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('geo-modal')) closeGeoModal();
 });
