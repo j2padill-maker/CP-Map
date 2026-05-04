@@ -2198,6 +2198,16 @@ updatePinStatus();
         </div>
       </div>
 
+      <!-- Step 4: Auto-place from Field Entry (shown after calibration saved) -->
+      <div class="geo-section" id="geo-fe-section" style="display:none">
+        <div class="geo-sec-hdr"><div class="geo-sec-num">4</div>Auto-Place Pins from Field Entry Data</div>
+        <div class="geo-sec-body">
+          <p class="geo-info">Geocode and auto-place pins using the addresses already collected from the <strong>Field Entry</strong> tab. Make sure you have clicked <strong>↻ Load Field Entries</strong> first so the pins are loaded into the map.</p>
+          <button class="geo-btn primary" style="width:100%" onclick="geoAutoPlaceFromFieldEntries()">🌐 Auto-Place from Field Entries</button>
+          <div class="geo-progress" id="geo-fe-progress"></div>
+        </div>
+      </div>
+
       <div class="geo-btns">
         <button class="geo-btn primary" onclick="geoGeocodeAllPoints()">⊕ Geocode Reference Points</button>
         <button class="geo-btn primary" id="geo-save-btn" onclick="geoSaveCalibration()" disabled>💾 Save Calibration</button>
@@ -2254,6 +2264,7 @@ function geoLoadState() {
       geoCalibMatrix = saved.matrix;
       geoPoints      = saved.points;
       document.getElementById('geo-calib-saved').style.display = 'block';
+      document.getElementById('geo-fe-section').style.display = 'block';
     }
   } catch(e) {}
   geoRenderPointRows();
@@ -2544,7 +2555,22 @@ function geoSaveCalibration() {
   if (!geoCalibMatrix) { alert('Calibration not ready — geocode all 3 points and set their map positions.'); return; }
   localStorage.setItem(GEO_CALIB_KEY, JSON.stringify({ matrix: geoCalibMatrix, points: geoPoints }));
   document.getElementById('geo-calib-saved').style.display = 'block';
-  setMsg('✓ Geo calibration saved for this station.');
+
+  // Show clear in-modal confirmation
+  const saveBtn = document.getElementById('geo-save-btn');
+  const orig = saveBtn.textContent;
+  saveBtn.textContent = '✓ Calibration Saved!';
+  saveBtn.style.background = 'var(--green, #0a7a30)';
+  saveBtn.style.borderColor = '#0a7a30';
+  setTimeout(() => {
+    saveBtn.textContent = orig;
+    saveBtn.style.background = '';
+    saveBtn.style.borderColor = '';
+  }, 3000);
+
+  // Show field entry auto-place section now that calibration is saved
+  document.getElementById('geo-fe-section').style.display = 'block';
+  setMsg('✓ Geo calibration saved. You can now auto-place field entry pins.');
 }
 
 function geoClearCalibration() {
@@ -2657,6 +2683,90 @@ async function geoAutoPlace(input) {
     progressEl.textContent = '✗ Error: ' + err.message;
     console.error('[GEO] Auto-place error:', err);
   }
+}
+
+// ── Auto-Place from Field Entries ─────────────────────────────────────────────
+async function geoAutoPlaceFromFieldEntries() {
+  if (!geoCalibMatrix) { alert('Save calibration first before auto-placing pins.'); return; }
+  if (!pdfDoc) { alert('Upload the station PDF map before auto-placing pins.'); return; }
+
+  const progressEl = document.getElementById('geo-fe-progress');
+  progressEl.style.display = 'block';
+
+  // Load field entries
+  let entries = [];
+  try { entries = JSON.parse(localStorage.getItem(KEY_FE) || '[]'); } catch(e) {}
+
+  // Also load current pins (field entries already imported)
+  const unplacedPins = pins.filter(p => !p.placed && p.address);
+  if (!unplacedPins.length && !entries.length) {
+    progressEl.textContent = '✗ No field entry data found — go to Field Entry tab and save entries first, then click ↻ Load Field Entries.';
+    return;
+  }
+
+  // If pins aren't loaded yet, load them first
+  if (!pins.length && entries.length) {
+    loadFieldEntries();
+  }
+
+  const toPlace = pins.filter(p => !p.placed && p.address);
+  if (!toPlace.length) {
+    progressEl.textContent = '✗ No unplaced pins with addresses found. Click ↻ Load Field Entries in the sidebar first.';
+    return;
+  }
+
+  progressEl.textContent = `Geocoding ${toPlace.length} pin address(es)…`;
+
+  let placed = 0, failed = 0, done = 0;
+
+  // Group by unique address to minimize API calls
+  const addrMap = new Map();
+  for (const pin of toPlace) {
+    const addr = pin.address.trim();
+    if (!addr) continue;
+    // For drop checks with range format "X → Y", extract start address
+    const cleanAddr = addr.includes('→') ? addr.split('→')[0].trim() : addr;
+    // Append city if not already present
+    const fullAddr = /san diego|chula vista|national city|imperial beach/i.test(cleanAddr)
+      ? cleanAddr : cleanAddr + ', San Diego, CA';
+    if (!addrMap.has(fullAddr)) addrMap.set(fullAddr, []);
+    addrMap.get(fullAddr).push(pin);
+  }
+
+  for (const [addr, pinsForAddr] of addrMap) {
+    done++;
+    progressEl.textContent = `Geocoding ${done}/${addrMap.size}: ${addr.substring(0, 45)}…`;
+    try {
+      const geo   = await geoGeocodeAddress(addr);
+      const pixel = geoLatLngToPixel(geo.lat, geo.lng, geoCalibMatrix);
+      if (!pixel) { failed += pinsForAddr.length; continue; }
+
+      // Check pixel is within reasonable bounds of the PDF canvas
+      const maxX = pdfCanvas ? pdfCanvas.width  / 2 : 9999;
+      const maxY = pdfCanvas ? pdfCanvas.height / 2 : 9999;
+      if (pixel.x < 0 || pixel.y < 0 || pixel.x > maxX || pixel.y > maxY) {
+        failed += pinsForAddr.length;
+        console.warn('[GEO] Pixel out of bounds for:', addr, pixel);
+        continue;
+      }
+
+      for (const pin of pinsForAddr) {
+        pin.placed = true;
+        pin.x = pixel.x;
+        pin.y = pixel.y;
+        placed++;
+      }
+    } catch(err) {
+      failed += pinsForAddr.length;
+      console.warn('[GEO] Failed:', addr, err.message);
+    }
+    await new Promise(r => setTimeout(r, 120));
+  }
+
+  savePins(); renderSidebar(); drawOverlay();
+  const stillUnplaced = pins.filter(p => !p.placed).length;
+  progressEl.textContent = `✓ Done — ${placed} pin(s) placed, ${failed} failed geocoding, ${stillUnplaced} still need manual placement.`;
+  setMsg(`✓ Auto-placement complete: ${placed} placed from field entries.`);
 }
 
 // ── Modal Open / Close ────────────────────────────────────────────────────────
