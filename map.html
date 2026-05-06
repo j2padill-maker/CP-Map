@@ -73,6 +73,25 @@
   .tp-info { flex: 1; min-width: 0; }
   .tp-name { font-size: 11px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: bold; }
   .tp-reads { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+
+  /* ── ADDRESS LIST (spreadsheet import) ── */
+  .addr-list { flex:1; overflow-y:auto; padding:4px; min-height:40px; }
+  .addr-item { display:flex; align-items:center; gap:8px; padding:7px 10px; margin-bottom:3px; border:1px solid var(--border); background:var(--panel); cursor:pointer; transition:all .15s; }
+  .addr-item:hover { border-color:var(--teal); background:rgba(77,217,232,0.08); }
+  .addr-item.selected { border-color:var(--teal); background:rgba(77,217,232,0.18); box-shadow:0 0 0 1px var(--teal); }
+  .addr-item.placed { opacity:0.55; }
+  .addr-item.placed .addr-name { text-decoration:line-through; color:var(--text-muted); }
+  .addr-check { font-size:11px; color:var(--green); flex-shrink:0; width:14px; text-align:center; }
+  .addr-tp { font-size:9px; color:var(--teal); font-weight:bold; flex-shrink:0; min-width:32px; }
+  .addr-name { font-size:10px; color:var(--text); flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .addr-section { border-bottom:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; flex:1; min-height:0; }
+  .addr-sec-hdr { padding:8px 12px 4px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+  .addr-sec-title { font-size:10px; letter-spacing:2px; color:var(--teal); text-transform:uppercase; font-weight:bold; }
+  .addr-sec-count { font-size:9px; color:var(--text-muted); }
+  .addr-place-hint { font-size:9px; color:var(--yellow); text-align:center; padding:5px 8px; background:rgba(255,200,0,0.08); border:1px solid rgba(255,200,0,0.2); margin:4px; display:none; }
+  .addr-place-hint.show { display:block; }
+  .addr-clear-sel { font-size:9px; padding:2px 8px; background:transparent; border:1px solid var(--border); color:var(--text-muted); cursor:pointer; font-family:inherit; }
+  .addr-clear-sel:hover { border-color:var(--teal); color:var(--teal); }
   .tp-delete { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; padding: 0 2px; flex-shrink: 0; line-height: 1; }
   .tp-delete:hover { color: var(--red-solid); }
 
@@ -255,6 +274,16 @@
     <div class="tp-list" id="tp-list">
       <div style="padding:12px;font-size:10px;color:var(--text-muted);text-align:center">No pins placed yet</div>
     </div>
+
+    <!-- Address list from spreadsheet — appears after upload -->
+    <div class="addr-section" id="addr-section" style="display:none">
+      <div class="addr-sec-hdr">
+        <span class="addr-sec-title">📍 Test Points</span>
+        <span class="addr-sec-count" id="addr-count">0 addresses</span>
+      </div>
+      <div class="addr-place-hint" id="addr-hint">Click the PDF map to place this pin</div>
+      <div class="addr-list" id="addr-list"></div>
+    </div>
   <div class="alert-panel collapsed" id="alert-panel">
     <div class="alert-panel-header" onclick="toggleAlertPanel()">
       <h3>&#9888; Critical Areas</h3>
@@ -390,6 +419,10 @@ let dragPin = null, dragOffX = 0, dragOffY = 0, isDragging = false;
 let rectifier = null; // {x, y, address, volt, amp}
 const RECT_KEY = 'cp409_rectifier';
 let pdfDoc = null, pdfPage = null, scale = 1.0, pendingXY = null;
+
+// ── ADDRESS LIST STATE ────────────────────────────────────────────────────────
+let addrList       = [];   // [{ tp, address, placed: bool }] built from spreadsheet
+let selectedAddr   = null; // currently selected address item for placement
 
 const mapCanvas     = document.getElementById('map-canvas');
 const overlayCanvas = document.getElementById('overlay-canvas');
@@ -530,7 +563,100 @@ async function loadData(input) {
     mvData   = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
     document.getElementById('status-data').textContent = mvData.length + ' ROWS';
     setMsg('Spreadsheet loaded — ' + mvData.length + ' rows. Click Apply Data to recolor.');
+    buildAddrList();
   } catch(e) { setMsg('Error: ' + e.message); }
+}
+
+// ── BUILD ADDRESS LIST FROM SPREADSHEET ───────────────────────────────────────
+function buildAddrList() {
+  if (!mvData.length) return;
+
+  // Extract unique test points with addresses
+  const seen = new Map(); // tp -> address
+  for (const row of mvData) {
+    const tp   = String(row['Point']    || '').trim();
+    const addr = String(row['Location'] || row['Address'] || '').trim();
+    if (!tp || !addr || tp.toUpperCase().startsWith('R ')) continue;
+    // Normalize TP number for display: "TP 1.000" -> "TP 1"
+    const tpClean = tp.replace(/\.0+$/, '').replace(/(\d+)\.0*$/, '$1');
+    if (!seen.has(tpClean)) seen.set(tpClean, addr);
+  }
+
+  // Sort by TP number
+  addrList = [...seen.entries()]
+    .map(([tp, address]) => ({ tp, address, placed: false }))
+    .sort((a, b) => {
+      const na = parseInt(a.tp.replace(/\D/g,'')) || 0;
+      const nb = parseInt(b.tp.replace(/\D/g,'')) || 0;
+      return na - nb;
+    });
+
+  // Mark already-placed entries
+  syncAddrListPlaced();
+  renderAddrList();
+
+  // Show the address section
+  document.getElementById('addr-section').style.display = 'flex';
+  document.getElementById('addr-section').style.flexDirection = 'column';
+}
+
+function syncAddrListPlaced() {
+  // Mark address items as placed if a matching pin already exists
+  for (const item of addrList) {
+    item.placed = pins.some(p =>
+      p.tpNum.replace(/\.0+$/,'').replace(/(\d+)\.0*$/,'$1') === item.tp ||
+      normAddrSimple(p.address) === normAddrSimple(item.address)
+    );
+  }
+}
+
+function normAddrSimple(s) {
+  return String(s).toLowerCase().replace(/[.,#]/g,'').replace(/\s+/g,' ').trim();
+}
+
+function renderAddrList() {
+  const list = document.getElementById('addr-list');
+  const countEl = document.getElementById('addr-count');
+  const placed = addrList.filter(a => a.placed).length;
+  countEl.textContent = `${placed}/${addrList.length} placed`;
+
+  list.innerHTML = '';
+  for (const item of addrList) {
+    const div = document.createElement('div');
+    div.className = 'addr-item' +
+      (item === selectedAddr ? ' selected' : '') +
+      (item.placed ? ' placed' : '');
+    div.innerHTML = `
+      <span class="addr-check">${item.placed ? '✓' : ''}</span>
+      <span class="addr-tp">${item.tp}</span>
+      <span class="addr-name" title="${item.address}">${item.address}</span>`;
+    div.addEventListener('click', () => selectAddr(item));
+    list.appendChild(div);
+  }
+}
+
+function selectAddr(item) {
+  if (item.placed) {
+    // If already placed, flash and highlight the existing pin
+    const match = pins.find(p =>
+      p.tpNum.replace(/\.0+$/,'').replace(/(\d+)\.0*$/,'$1') === item.tp
+    );
+    if (match) { flashPin(match); showDetail(match, null); }
+    return;
+  }
+  selectedAddr = (selectedAddr === item) ? null : item; // toggle
+  renderAddrList();
+  const hint = document.getElementById('addr-hint');
+  if (selectedAddr) {
+    hint.textContent = `📍 Click map to place: ${selectedAddr.tp} — ${selectedAddr.address}`;
+    hint.classList.add('show');
+    setMsg('Selected: ' + selectedAddr.tp + ' — ' + selectedAddr.address + '. Click the PDF map to place.');
+    overlayCanvas.style.cursor = 'crosshair';
+  } else {
+    hint.classList.remove('show');
+    setMsg('Selection cleared.');
+    overlayCanvas.style.cursor = mode === 'place' ? 'crosshair' : 'default';
+  }
 }
 
 function applyDataToPoints() {
@@ -920,6 +1046,8 @@ function renderSidebar() {
     div.addEventListener('click', () => { flashPin(pin); showDetail(pin, null); });
     list.appendChild(div);
   }
+  // Keep address list in sync
+  if (addrList.length) { syncAddrListPlaced(); renderAddrList(); }
   renderAlertPanel();
 }
 
@@ -1136,6 +1264,47 @@ overlayCanvas.addEventListener('click', (e) => {
   // No pin hit — place new pin if in place mode
   if (mode !== 'place') return;
   if (!pdfPage) { setMsg('Upload a PDF map first.'); return; }
+
+  // ── ADDRESS LIST PLACEMENT MODE ───────────────────────────────────────────
+  // If an address is selected from the list, place it directly — no modal
+  if (selectedAddr) {
+    const id  = Date.now();
+    const pin = {
+      id, placed: true,
+      x: cx / scale, y: cy / scale,
+      tpNum:   selectedAddr.tp,
+      address: selectedAddr.address,
+      color: 'none', offRead: null, onRead: null, diff: null
+    };
+    pins.push(pin);
+    savePins();
+
+    // Mark as placed in addr list and auto-advance to next unplaced
+    selectedAddr.placed = true;
+    const currentItem = selectedAddr;
+    const nextUnplaced = addrList.find(a => !a.placed && a !== currentItem);
+    selectedAddr = nextUnplaced || null;
+
+    // Update hint
+    const hint = document.getElementById('addr-hint');
+    if (selectedAddr) {
+      hint.textContent = `📍 Click map to place: ${selectedAddr.tp} — ${selectedAddr.address}`;
+      setMsg('✓ Placed ' + currentItem.tp + '. Now placing: ' + selectedAddr.tp + ' — ' + selectedAddr.address);
+    } else {
+      hint.classList.remove('show');
+      setMsg('✓ All test points placed! Click Apply Data → Recolor Map to add voltage readings.');
+    }
+
+    renderAddrList();
+    drawOverlay();
+    renderSidebar();
+
+    // Apply data immediately if mvData loaded so pin gets colored right away
+    if (mvData.length) applyDataToPoints();
+    return;
+  }
+
+  // ── STANDARD PLACEMENT MODE — opens modal ────────────────────────────────
   pendingXY = { x: cx / scale, y: cy / scale }; // store in PDF-space
   const nums = pins.map(p => parseInt(p.tpNum.replace(/\D/g,''))).filter(n => !isNaN(n));
   document.getElementById('tp-num').value  = 'TP ' + (nums.length ? Math.max(...nums) + 1 : 1);
