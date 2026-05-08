@@ -614,20 +614,56 @@ function loadAddrListFromStorage() {
     const rows = JSON.parse(stored);
     if (!rows || !rows.length) return;
 
-    // Use same logic as buildAddrList but operating on stored rows
     const seen = new Map();
-    for (const row of rows) {
-      // Handle both array format and object format
-      let tp, addr;
-      if (Array.isArray(row)) continue; // skip header arrays
-      tp   = String(row['Point']    || row['point']    || '').trim();
-      addr = String(row['Location'] || row['location'] || row['Address'] || '').trim();
-      if (!tp || !addr || tp.toUpperCase().startsWith('R ')) continue;
-      const tpClean = tp.replace(/\.0+$/, '').replace(/(\d+)\.0*$/, '$1');
-      if (!seen.has(tpClean)) seen.set(tpClean, addr.trim());
+
+    // Detect format: array-of-arrays vs array-of-objects
+    const isArrayFormat = Array.isArray(rows[0]);
+
+    if (isArrayFormat) {
+      // Array format — first row is headers, find Point and Location column indices
+      const headers = rows[0].map(h => String(h || '').toLowerCase().trim());
+      const ptIdx   = headers.findIndex(h => h === 'point' || h.includes('point'));
+      const locIdx  = headers.findIndex(h => h === 'location' || h.includes('locat'));
+      if (ptIdx === -1 || locIdx === -1) {
+        console.warn('[Map] Could not find Point/Location columns in stored data');
+        return;
+      }
+      for (let i = 1; i < rows.length; i++) {
+        const row  = rows[i];
+        const tp   = String(row[ptIdx]  || '').trim();
+        const addr = String(row[locIdx] || '').trim();
+        if (!tp || !addr || tp.toUpperCase().startsWith('R ')) continue;
+        const tpClean = tp.replace(/\.0+$/, '').replace(/(\d+)\.0*$/, '$1');
+        if (!seen.has(tpClean)) seen.set(tpClean, addr.trim());
+      }
+      // For mvData, convert arrays to objects using header row
+      if (!mvData.length) {
+        mvData = rows.slice(1).map(row => {
+          const obj = {};
+          headers.forEach((h, i) => {
+            // Use original header capitalization from first row
+            const origKey = String(rows[0][i] || '');
+            obj[origKey] = row[i];
+          });
+          return obj;
+        });
+      }
+    } else {
+      // Object format — use named keys directly
+      for (const row of rows) {
+        const tp   = String(row['Point']    || row['point']    || '').trim();
+        const addr = String(row['Location'] || row['location'] || row['Address'] || '').trim();
+        if (!tp || !addr || tp.toUpperCase().startsWith('R ')) continue;
+        const tpClean = tp.replace(/\.0+$/, '').replace(/(\d+)\.0*$/, '$1');
+        if (!seen.has(tpClean)) seen.set(tpClean, addr.trim());
+      }
+      if (!mvData.length) mvData = rows;
     }
 
-    if (!seen.size) return;
+    if (!seen.size) {
+      console.warn('[Map] No test points found in stored survey data');
+      return;
+    }
 
     addrList = [...seen.entries()]
       .map(([tp, address]) => ({ tp, address, placed: false }))
@@ -636,9 +672,6 @@ function loadAddrListFromStorage() {
         const nb = parseInt(b.tp.replace(/\D/g,'')) || 0;
         return na - nb;
       });
-
-    // Also load mvData from storage so color coding works without re-uploading
-    if (!mvData.length) mvData = rows;
 
     syncAddrListPlaced();
     renderAddrList();
@@ -650,7 +683,6 @@ function loadAddrListFromStorage() {
     // Auto-apply color coding to any already-placed pins
     if (pins.length) applyDataToPoints();
 
-    // Show how many loaded
     const fname = localStorage.getItem('cp409_surveyFileName') || 'Overview data';
     setMsg(`✓ ${addrList.length} test points loaded from ${fname} — click an address to begin placing pins.`);
   } catch(e) {
