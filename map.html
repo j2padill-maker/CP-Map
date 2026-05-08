@@ -244,7 +244,6 @@
         <div class="uz-label">Click to upload spreadsheet</div>
         <div class="uz-filename" id="data-name">No file loaded</div>
       </div>
-      <button class="apply-btn" onclick="applyDataToPoints()">▶ Apply Data → Recolor Map</button>
       <button class="apply-btn" onclick="clearAll()" style="background:transparent;border-color:rgba(240,64,64,0.5);color:rgba(240,64,64,0.7);margin-top:4px" onmouseover="this.style.background='rgba(240,64,64,0.15)';this.style.color='#f04040'" onmouseout="this.style.background='transparent';this.style.color='rgba(240,64,64,0.7)'">✕ Clear All Pins</button>
     </div>
 
@@ -259,7 +258,7 @@
           3. Click map to place a test point<br>
           4. Enter TP number &amp; address<br>
           5. Upload MV spreadsheet<br>
-          6. Click Apply Data → Recolor
+          6. Color coding applies automatically
         </p>
       </div>
     </div>
@@ -281,6 +280,7 @@
       <div class="addr-sec-hdr">
         <span class="addr-sec-title">📍 Test Points</span>
         <span class="addr-sec-count" id="addr-count">0 addresses</span>
+        <button onclick="loadAddrListFromStorage()" style="font-size:9px;padding:2px 7px;background:transparent;border:1px solid var(--border);color:var(--text-muted);cursor:pointer;font-family:inherit;margin-left:4px" title="Reload from overview data">↻</button>
       </div>
       <div class="addr-place-hint" id="addr-hint">Click the PDF map to place this pin</div>
       <div class="addr-list" id="addr-list"></div>
@@ -563,8 +563,9 @@ async function loadData(input) {
     const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
     mvData   = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
     document.getElementById('status-data').textContent = mvData.length + ' ROWS';
-    setMsg('Spreadsheet loaded — ' + mvData.length + ' rows. Click Apply Data to recolor.');
+    setMsg('Spreadsheet loaded — ' + mvData.length + ' rows. Color coding applied automatically.');
     buildAddrList();
+    applyDataToPoints();
   } catch(e) { setMsg('Error: ' + e.message); }
 }
 
@@ -580,8 +581,10 @@ function buildAddrList() {
     if (!tp || !addr || tp.toUpperCase().startsWith('R ')) continue;
     // Normalize TP number for display: "TP 1.000" -> "TP 1"
     const tpClean = tp.replace(/\.0+$/, '').replace(/(\d+)\.0*$/, '$1');
-    if (!seen.has(tpClean)) seen.set(tpClean, addr);
+    if (!seen.has(tpClean)) seen.set(tpClean, addr.trim());
   }
+
+  if (!seen.size) return;
 
   // Sort by TP number
   addrList = [...seen.entries()]
@@ -597,8 +600,62 @@ function buildAddrList() {
   renderAddrList();
 
   // Show the address section
-  document.getElementById('addr-section').style.display = 'flex';
-  document.getElementById('addr-section').style.flexDirection = 'column';
+  const sec = document.getElementById('addr-section');
+  sec.style.display        = 'flex';
+  sec.style.flexDirection  = 'column';
+}
+
+// ── LOAD ADDRESS LIST FROM OVERVIEW SURVEY DATA ───────────────────────────────
+// Called on startup — reads cp409_surveyData saved by overview.html
+function loadAddrListFromStorage() {
+  try {
+    const stored = localStorage.getItem('cp409_surveyData');
+    if (!stored) return;
+    const rows = JSON.parse(stored);
+    if (!rows || !rows.length) return;
+
+    // Use same logic as buildAddrList but operating on stored rows
+    const seen = new Map();
+    for (const row of rows) {
+      // Handle both array format and object format
+      let tp, addr;
+      if (Array.isArray(row)) continue; // skip header arrays
+      tp   = String(row['Point']    || row['point']    || '').trim();
+      addr = String(row['Location'] || row['location'] || row['Address'] || '').trim();
+      if (!tp || !addr || tp.toUpperCase().startsWith('R ')) continue;
+      const tpClean = tp.replace(/\.0+$/, '').replace(/(\d+)\.0*$/, '$1');
+      if (!seen.has(tpClean)) seen.set(tpClean, addr.trim());
+    }
+
+    if (!seen.size) return;
+
+    addrList = [...seen.entries()]
+      .map(([tp, address]) => ({ tp, address, placed: false }))
+      .sort((a, b) => {
+        const na = parseInt(a.tp.replace(/\D/g,'')) || 0;
+        const nb = parseInt(b.tp.replace(/\D/g,'')) || 0;
+        return na - nb;
+      });
+
+    // Also load mvData from storage so color coding works without re-uploading
+    if (!mvData.length) mvData = rows;
+
+    syncAddrListPlaced();
+    renderAddrList();
+
+    const sec = document.getElementById('addr-section');
+    sec.style.display       = 'flex';
+    sec.style.flexDirection = 'column';
+
+    // Auto-apply color coding to any already-placed pins
+    if (pins.length) applyDataToPoints();
+
+    // Show how many loaded
+    const fname = localStorage.getItem('cp409_surveyFileName') || 'Overview data';
+    setMsg(`✓ ${addrList.length} test points loaded from ${fname} — click an address to begin placing pins.`);
+  } catch(e) {
+    console.warn('[Map] Could not load survey data from storage:', e);
+  }
 }
 
 function syncAddrListPlaced() {
@@ -977,7 +1034,7 @@ function drawOverlay() {
 
 // ── COLOR REASON TEXT — three-score system ────────────────────────────────────
 function colorReason(pin) {
-  if (pin.color === 'none' || pin.offRead === null) return 'No MV data has been matched to this test point yet. Upload a spreadsheet and click Apply Data.';
+  if (pin.color === 'none' || pin.offRead === null) return 'No MV data has been matched to this test point yet. Upload a spreadsheet in Overview to enable color coding.';
 
   const offStr  = pin.offRead.toFixed(3) + 'V (' + Math.round(pin.offRead*1000) + 'mV)';
   const limStr  = pin.offLimit != null ? pin.offLimit.toFixed(3) + 'V' : 'not available';
@@ -1192,6 +1249,7 @@ document.addEventListener('mouseup', (e) => {
     savePins();
     detectPOD();
     renderSidebar();
+    if (addrList.length) { syncAddrListPlaced(); renderAddrList(); }
     setMsg('Pin repositioned: ' + dragPin.tpNum);
   }
   dragPin    = null;
@@ -1293,7 +1351,7 @@ overlayCanvas.addEventListener('click', (e) => {
       setMsg('✓ Placed ' + currentItem.tp + '. Now placing: ' + selectedAddr.tp + ' — ' + selectedAddr.address);
     } else {
       hint.classList.remove('show');
-      setMsg('✓ All test points placed! Click Apply Data → Recolor Map to add voltage readings.');
+      setMsg('✓ All test points placed! Color coding applied automatically.');
     }
 
     renderAddrList();
@@ -1572,6 +1630,10 @@ function closeEditModal() {
 
 loadPins(); loadRectifier(); renderSidebar(); drawOverlay(); updateRectPanel(); setMode('place');
 restorePDF();
+// Auto-load test point addresses from overview survey data
+loadAddrListFromStorage();
+// Auto-apply color coding to any already-placed pins
+if (typeof applyDataToPoints === 'function') applyDataToPoints();
 </script>
 <script>
 if ("serviceWorker" in navigator) {
