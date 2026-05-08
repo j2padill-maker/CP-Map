@@ -468,7 +468,8 @@ function analyze(records) {
     const prior    = sortedCycles[1] || null;
     const offRead  = latest.off;
     const onRead   = latest.on;
-    const offLimit = latest.offLimit; // passing threshold from spreadsheet
+    const offLimit = latest.offLimit; // passing threshold for off-read
+    const onLimit  = latest.onLimit;  // passing threshold for on-read
 
     // Differential in mV
     const diff = (offRead !== null && onRead !== null)
@@ -491,6 +492,8 @@ function analyze(records) {
     let proximityMv      = null;  // how many mV off-read is from limit
     let proximityScore   = 'green';
     let onFailing        = false;
+    let onProximityMv    = null;  // how many mV on-read is from on-limit
+    let onProximityScore = 'green';
 
     if (offRead !== null && offLimit !== null) {
       const margin = Math.round((offLimit - offRead) * 1000); // negative = passing, positive = failing
@@ -509,11 +512,27 @@ function analyze(records) {
       thresholdScore = 'unknown';
     }
 
-    // Check on-read hard fail against same lower limit
-    if (onRead !== null && offLimit !== null && onRead > offLimit) {
-      onFailing    = true;
-      thresholdScore = 'red';
-      failingThreshold = true;
+    // Check on-read against its own lower limit with full proximity scoring
+    const effectiveOnLimit = onLimit !== null ? onLimit : offLimit;
+    if (onRead !== null && effectiveOnLimit !== null) {
+      if (onRead > effectiveOnLimit) {
+        // Hard fail
+        onFailing        = true;
+        thresholdScore   = 'red';
+        failingThreshold = true;
+        onProximityScore = 'red';
+      } else {
+        // Passing — check proximity
+        onProximityMv = Math.round((onRead - effectiveOnLimit) * -1000);
+        if      (onProximityMv <= 10) onProximityScore = 'orange';
+        else if (onProximityMv <= 20) onProximityScore = 'yellow';
+        else                          onProximityScore = 'green';
+        // Elevate overall threshold score if on-read proximity is worse
+        const scoreRank = { green: 0, yellow: 1, orange: 2, red: 3, unknown: 1 };
+        if (scoreRank[onProximityScore] > scoreRank[thresholdScore]) {
+          thresholdScore = onProximityScore;
+        }
+      }
     }
 
     // 2. CYCLE FLUCTUATION (positive offDelta = dropped = worse)
@@ -562,8 +581,8 @@ function analyze(records) {
     // Bottom quartile placeholder — resolved after all points collected
     points.push({
       tp, address: data.address, offRead, onRead, diff, offDelta, onDelta,
-      bestOff, color, offLimit, failingThreshold, onFailing, proximityMv,
-      proximityScore, fluctScore, diffScore,
+      bestOff, color, offLimit, onLimit, failingThreshold, onFailing, proximityMv,
+      proximityScore, onProximityMv, onProximityScore, fluctScore, diffScore,
       thresholdScore, drops: [], cycles: sortedCycles, isPOD, improving
     });
   }
@@ -643,19 +662,38 @@ function buildExplanation(p) {
   const parts = [];
 
   // ── 1. THRESHOLD ──────────────────────────────────────────────────────────
-  if (p.offLimit !== null) {
+  const effectiveOnLimitStr = p.onLimit !== null ? (p.onLimit*1000).toFixed(0)+'mV' : limStr;
+  if (p.offLimit !== null || p.onLimit !== null) {
     if (p.failingThreshold) {
-      if (p.onFailing) {
-        parts.push(`<b style="color:var(--red)">⚠ ON-READ FAILING:</b> On-read of ${onStr} does not meet the lower limit of ${limStr}. The pipe is not adequately polarized at this location.`);
+      if (p.onFailing && (p.failingThreshold && p.offRead !== null && p.offLimit !== null && p.offRead > p.offLimit)) {
+        // Both failing
+        parts.push(`<b style="color:var(--red)">⚠ BOTH READS FAILING:</b> Off-read of ${offStr} fails the off-read limit of ${limStr} AND on-read of ${onStr} fails the on-read limit of ${effectiveOnLimitStr}. This test point has critically insufficient cathodic protection.`);
+      } else if (p.onFailing) {
+        parts.push(`<b style="color:var(--red)">⚠ ON-READ FAILING:</b> On-read of ${onStr} does not meet the on-read lower limit of ${effectiveOnLimitStr}. The pipe is not adequately polarized at this location.`);
       } else {
         parts.push(`<b style="color:var(--red)">⚠ FAILING THRESHOLD:</b> Off-read of ${offStr} does not meet the lower limit of ${limStr}. The pipe at this location is not receiving adequate cathodic protection — this is a failing read per station criteria.`);
       }
-    } else if (p.proximityMv !== null && p.proximityMv <= 10) {
-      parts.push(`<b style="color:var(--orange)">⚠ NEAR LIMIT (ORANGE):</b> Off-read of ${offStr} is only ${p.proximityMv}mV above the lower limit of ${limStr}. Within 10mV of failing — approaching threshold. Monitor closely and investigate current flow at this location.`);
-    } else if (p.proximityMv !== null && p.proximityMv <= 20) {
-      parts.push(`<b style="color:var(--yellow)">△ APPROACHING LIMIT (YELLOW):</b> Off-read of ${offStr} is ${p.proximityMv}mV above the lower limit of ${limStr}. Between 11–20mV from failing — flagged for monitoring. Any further drop will trigger orange.`);
     } else {
-      parts.push(`<b style="color:var(--green)">✓ THRESHOLD PASSING:</b> Off-read of ${offStr} meets the lower limit of ${limStr} with a margin of ${p.proximityMv !== null ? p.proximityMv + 'mV' : 'adequate margin'}.`);
+      // Off-read proximity narrative
+      if (p.offLimit !== null) {
+        if (p.proximityMv !== null && p.proximityMv <= 10) {
+          parts.push(`<b style="color:var(--orange)">⚠ OFF-READ NEAR LIMIT (ORANGE):</b> Off-read of ${offStr} is only ${p.proximityMv}mV above the off-read limit of ${limStr}. Within 10mV of failing — approaching threshold. Monitor closely and investigate current flow at this location.`);
+        } else if (p.proximityMv !== null && p.proximityMv <= 20) {
+          parts.push(`<b style="color:var(--yellow)">△ OFF-READ APPROACHING LIMIT (YELLOW):</b> Off-read of ${offStr} is ${p.proximityMv}mV above the off-read limit of ${limStr}. Between 11–20mV from failing — flagged for monitoring. Any further drop will trigger orange.`);
+        } else {
+          parts.push(`<b style="color:var(--green)">✓ OFF-READ PASSING:</b> Off-read of ${offStr} meets the lower limit of ${limStr} with a margin of ${p.proximityMv !== null ? p.proximityMv + 'mV' : 'adequate margin'}.`);
+        }
+      }
+      // On-read proximity narrative
+      if (p.onProximityMv !== null) {
+        if (p.onProximityMv <= 10) {
+          parts.push(`<b style="color:var(--orange)">⚠ ON-READ NEAR LIMIT (ORANGE):</b> On-read of ${onStr} is only ${p.onProximityMv}mV above the on-read limit of ${effectiveOnLimitStr}. Within 10mV of failing — polarization is marginal at this location.`);
+        } else if (p.onProximityMv <= 20) {
+          parts.push(`<b style="color:var(--yellow)">△ ON-READ APPROACHING LIMIT (YELLOW):</b> On-read of ${onStr} is ${p.onProximityMv}mV above the on-read limit of ${effectiveOnLimitStr}. Between 11–20mV from failing — monitor polarization at this location.`);
+        } else {
+          parts.push(`<b style="color:var(--green)">✓ ON-READ PASSING:</b> On-read of ${onStr} meets the on-read limit of ${effectiveOnLimitStr} with a margin of ${p.onProximityMv}mV.`);
+        }
+      }
     }
   } else if (p.bottomQuartile) {
     parts.push(`<b style="color:var(--orange)">△ BOTTOM QUARTILE (No Limit Available):</b> Off-read of ${offStr} falls in the bottom 25% of station readings. No lower limit is available for this test point so pass/fail cannot be determined. Flagged for monitoring.`);
@@ -800,7 +838,21 @@ function renderCard(p) {
 
   // Off-read column color: red if failing threshold, green if passing, grey if no limit
   const offReadColor = p.offLimit === null ? 'var(--text-dim)'
-    : p.failingThreshold ? 'var(--red)' : 'var(--green)';
+    : p.failingThreshold && !p.onFailing ? 'var(--red)'
+    : p.failingThreshold ? 'var(--red)'
+    : 'var(--green)';
+
+  // On-read column color: uses full proximity scoring like off-read
+  const onScoreColors = { red: 'var(--red)', orange: 'var(--orange, #f4a030)', yellow: 'var(--yellow)', green: 'var(--green)', unknown: 'var(--text-dim)' };
+  const onReadColor = p.onRead === null ? 'var(--text-dim)'
+    : p.onLimit === null && p.offLimit === null ? 'var(--text-dim)'
+    : onScoreColors[p.onProximityScore] || 'var(--text-dim)';
+
+  // On limit color mirrors on-read color
+  const onLimitColor = p.onFailing ? 'var(--red)'
+    : p.onProximityScore === 'orange' ? 'var(--orange, #f4a030)'
+    : p.onProximityScore === 'yellow' ? 'var(--yellow)'
+    : 'var(--text-muted)';
   const dropFlag  = p.drops.filter(d => d.type === 'off').length > 0
     ? `<span style="font-size:9px;background:rgba(240,64,64,0.2);color:var(--red);padding:1px 5px;margin-left:6px">DROP FLAGGED</span>` : '';
 
@@ -817,15 +869,19 @@ function renderCard(p) {
           </div>
           <div class="ac-read-block">
             <div class="ac-read-label">On-Read</div>
-            <div class="ac-read-val" style="color:var(--text-dim)">${p.onRead !== null ? (p.onRead*1000).toFixed(0)+'mV' : '—'}</div>
+            <div class="ac-read-val" style="color:${onReadColor}">${p.onRead !== null ? (p.onRead*1000).toFixed(0)+'mV' : '—'}</div>
           </div>
           <div class="ac-read-block">
             <div class="ac-read-label">ON/OFF Gap</div>
             <div class="ac-diff-val" style="color:${diffColor}">${p.diff !== null ? p.diff+'mV' : '—'}</div>
           </div>
           <div class="ac-read-block">
-            <div class="ac-read-label">Limit</div>
-            <div class="ac-read-val" style="color:${p.failingThreshold ? 'var(--red)' : 'var(--text-muted)'}">${p.offLimit !== null ? (p.offLimit*1000).toFixed(0)+'mV' : '—'}</div>
+            <div class="ac-read-label">Off Limit</div>
+            <div class="ac-read-val" style="color:${p.failingThreshold && !p.onFailing ? 'var(--red)' : p.offLimit !== null ? 'var(--text-muted)' : 'var(--text-muted)'}">${p.offLimit !== null ? (p.offLimit*1000).toFixed(0)+'mV' : '—'}</div>
+          </div>
+          <div class="ac-read-block">
+            <div class="ac-read-label">On Limit</div>
+            <div class="ac-read-val" style="color:${onLimitColor}">${p.onLimit !== null ? (p.onLimit*1000).toFixed(0)+'mV' : '—'}</div>
           </div>
           <div class="ac-read-block">
             <div class="ac-read-label">vs Prior</div>
@@ -852,8 +908,9 @@ function renderDetail(p) {
         <div class="detail-row"><span class="dr-label">Off-Read</span><span class="dr-val">${p.offRead !== null ? p.offRead.toFixed(3)+'V' : '—'}</span></div>
         <div class="detail-row"><span class="dr-label">On-Read</span><span class="dr-val">${p.onRead !== null ? p.onRead.toFixed(3)+'V' : '—'}</span></div>
         <div class="detail-row"><span class="dr-label">ON/OFF Gap</span><span class="dr-val">${p.diff !== null ? p.diff+'mV' : '—'}</span></div>
-        <div class="detail-row"><span class="dr-label">Lower Limit (Threshold)</span><span class="dr-val" style="color:${p.failingThreshold ? 'var(--red)' : 'var(--green)'}">${p.offLimit !== null ? p.offLimit.toFixed(3)+'V' : 'Not available'}</span></div>
-        <div class="detail-row"><span class="dr-label">Pass/Fail</span><span class="dr-val" style="color:${p.failingThreshold ? 'var(--red)' : 'var(--green)'}">${p.failingThreshold ? '✗ FAILING' : p.offLimit !== null ? '✓ PASSING' : 'No limit data'}</span></div>
+        <div class="detail-row"><span class="dr-label">Off Limit (Threshold)</span><span class="dr-val" style="color:${p.failingThreshold && !p.onFailing ? 'var(--red)' : 'var(--green)'}">${p.offLimit !== null ? p.offLimit.toFixed(3)+'V' : 'Not available'}</span></div>
+        <div class="detail-row"><span class="dr-label">On Limit (Threshold)</span><span class="dr-val" style="color:${p.onFailing ? 'var(--red)' : p.onLimit !== null ? 'var(--green)' : 'var(--text-muted)'}">${p.onLimit !== null ? p.onLimit.toFixed(3)+'V' : 'Not available'}</span></div>
+        <div class="detail-row"><span class="dr-label">Pass/Fail</span><span class="dr-val" style="color:${p.failingThreshold ? 'var(--red)' : 'var(--green)'}">${p.failingThreshold ? (p.onFailing ? '✗ FAILING — On-Read below limit' : '✗ FAILING — Off-Read below limit') : p.offLimit !== null ? '✓ PASSING' : 'No limit data'}</span></div>
         <div class="detail-row"><span class="dr-label">Best Historical Off</span><span class="dr-val">${p.bestOff !== null ? p.bestOff.toFixed(3)+'V' : '—'}</span></div>
         <div class="detail-row"><span class="dr-label">Off vs Prior Cycle</span><span class="dr-val">${p.offDelta !== null ? (p.offDelta > 0 ? '▼ dropped ' : '▲ improved ')+Math.abs(p.offDelta)+'mV' : 'No prior cycle'}</span></div>
         <div class="detail-row"><span class="dr-label">On vs Prior Cycle</span><span class="dr-val">${p.onDelta !== null ? (p.onDelta > 0 ? '▼ dropped ' : '▲ improved ')+Math.abs(p.onDelta)+'mV' : 'No prior cycle'}</span></div>
