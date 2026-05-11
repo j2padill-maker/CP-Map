@@ -78,8 +78,8 @@
   .instructions p { font-size: 10px; color: var(--text-dim); line-height: 1.7; }
   .instructions strong { color: var(--teal); }
 
-  .tp-header { padding: 5px 10px; font-size: 10px; color: var(--text-dim); border-bottom: 1px solid var(--border); background: var(--panel); letter-spacing: 1px; text-transform: uppercase; font-weight: bold; }
-  .tp-list { flex: 1; overflow-y: auto; padding: 6px; min-height: 60px; }
+  .tp-header { padding: 5px 10px; font-size: 10px; color: var(--text-dim); border-bottom: 1px solid var(--border); background: var(--panel); letter-spacing: 1px; text-transform: uppercase; font-weight: bold; flex-shrink:0; }
+  .tp-list { overflow-y: auto; padding: 6px; max-height: 160px; flex-shrink:0; border-bottom:1px solid var(--border); }
   .tp-item { background: var(--panel); border: 1px solid var(--border); padding: 8px 10px; margin-bottom: 5px; cursor: pointer; transition: all .15s; display: flex; align-items: center; gap: 8px; }
   .tp-item:hover { border-color: var(--teal); background: var(--panel-light); }
   .tp-dot { width: 13px; height: 13px; border-radius: 50%; flex-shrink: 0; border: 2px solid rgba(255,255,255,0.3); }
@@ -98,6 +98,10 @@
   .addr-tp { font-size:9px; color:var(--teal); font-weight:bold; flex-shrink:0; min-width:32px; }
   .addr-name { font-size:10px; color:var(--text); flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .addr-section { border-bottom:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; flex:1; min-height:0; }
+  .addr-list { flex:1; overflow-y:auto; padding:4px; }
+  .addr-list::-webkit-scrollbar { width:4px; }
+  .addr-list::-webkit-scrollbar-track { background:var(--surface); }
+  .addr-list::-webkit-scrollbar-thumb { background:var(--teal-dark); border-radius:2px; }
   .addr-sec-hdr { padding:8px 12px 4px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
   .addr-sec-title { font-size:10px; letter-spacing:2px; color:var(--teal); text-transform:uppercase; font-weight:bold; }
   .addr-sec-count { font-size:9px; color:var(--text-muted); }
@@ -297,14 +301,20 @@
     </div>
 
     <!-- Address list from overview survey data -->
-    <div class="addr-section" id="addr-section" style="display:none">
+    <div class="addr-section" id="addr-section">
       <div class="addr-sec-hdr">
         <span class="addr-sec-title">📍 Test Points</span>
-        <span class="addr-sec-count" id="addr-count">0 addresses</span>
+        <span class="addr-sec-count" id="addr-count">Loading…</span>
         <button onclick="loadAddrListFromStorage()" style="font-size:9px;padding:2px 7px;background:transparent;border:1px solid var(--border);color:var(--text-muted);cursor:pointer;font-family:inherit;margin-left:4px" title="Reload from overview data">↻</button>
       </div>
-      <div class="addr-place-hint" id="addr-hint">Click the PDF map to place this pin</div>
-      <div class="addr-list" id="addr-list"></div>
+      <div class="addr-place-hint" id="addr-hint">Click an address below, then click its location on the map</div>
+      <div class="addr-list" id="addr-list">
+        <div style="padding:12px;font-size:10px;color:var(--text-muted);text-align:center;line-height:1.8">
+          No test points loaded yet.<br>
+          Upload a spreadsheet in<br>
+          <a href="overview.html" style="color:var(--teal)">Overview</a> to populate this list.
+        </div>
+      </div>
     </div>
 
   <div class="alert-panel collapsed" id="alert-panel">
@@ -619,10 +629,6 @@ function buildAddrList() {
   // Mark already-placed entries
   syncAddrListPlaced();
   renderAddrList();
-
-  // Show the address section
-  document.getElementById('addr-section').style.display = 'flex';
-  document.getElementById('addr-section').style.flexDirection = 'column';
 }
 
 function syncAddrListPlaced() {
