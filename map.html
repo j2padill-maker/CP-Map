@@ -11,6 +11,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CP Station 409 — Read Potential Map</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root {
     --bg:          #3a3f44;
@@ -590,34 +591,84 @@ document.addEventListener('keydown', e => {
 async function loadData(input) {
   const file = input.files[0]; if (!file) return;
   document.getElementById('data-name').textContent = file.name;
-  document.getElementById('data-name').textContent = file.name;
   document.getElementById('data-name').classList.remove('none');
   setMsg('Parsing spreadsheet…');
   try {
-    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
-    mvData   = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+    const wb   = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+    const ws   = wb.Sheets[wb.SheetNames[0]];
+    // Store raw arrays (header:1) into localStorage so overview and map share same cache key
+    const rawRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    try {
+      localStorage.setItem('cp409_surveyData',  JSON.stringify(rawRows));
+      localStorage.setItem('cp409_surveyFileName', file.name);
+    } catch(e) { console.warn('Could not cache survey data:', e); }
+    // Also build object-keyed version for internal applyDataToPoints use
+    mvData = XLSX.utils.sheet_to_json(ws, { defval: '' });
     document.getElementById('status-data').textContent = mvData.length + ' ROWS';
     setMsg('Spreadsheet loaded — ' + mvData.length + ' rows. Click Apply Data to recolor.');
-    buildAddrList();
+    buildAddrListFromRawRows(rawRows);
   } catch(e) { setMsg('Error: ' + e.message); }
 }
 
-// ── BUILD ADDRESS LIST FROM SPREADSHEET ───────────────────────────────────────
-function buildAddrList() {
-  if (!mvData.length) return;
+// ── LOAD ADDRESS LIST FROM OVERVIEW LOCALSTORAGE ──────────────────────────────
+// Called on page load and by the ↻ button — reads cp409_surveyData written by overview.html
+function loadAddrListFromStorage() {
+  try {
+    const saved = localStorage.getItem('cp409_surveyData');
+    const fname = localStorage.getItem('cp409_surveyFileName');
+    if (!saved) {
+      document.getElementById('addr-count').textContent = 'No data — upload in Overview';
+      return;
+    }
+    const rawRows = JSON.parse(saved);
+    if (fname) {
+      document.getElementById('data-name').textContent = fname + ' (cached)';
+      document.getElementById('data-name').classList.remove('none');
+    }
+    // Also rebuild mvData from the raw rows so Apply Data works without re-uploading
+    const hdr = rawRows[0] || [];
+    mvData = rawRows.slice(1).map(row => {
+      const obj = {};
+      hdr.forEach((h, i) => { obj[h] = row[i]; });
+      return obj;
+    });
+    document.getElementById('status-data').textContent = mvData.length + ' ROWS';
+    buildAddrListFromRawRows(rawRows);
+    setMsg('Address list loaded from Overview data (' + (rawRows.length - 1) + ' rows).');
+  } catch(e) {
+    document.getElementById('addr-count').textContent = 'Error loading data';
+    setMsg('Error loading cached data: ' + e.message);
+  }
+}
 
-  // Extract unique test points with addresses
-  const seen = new Map(); // tp -> address
-  for (const row of mvData) {
-    const tp   = String(row['Point']    || '').trim();
-    const addr = String(row['Location'] || row['Address'] || '').trim();
-    if (!tp || !addr || tp.toUpperCase().startsWith('R ')) continue;
-    // Normalize TP number for display: "TP 1.000" -> "TP 1"
+// ── BUILD ADDRESS LIST FROM RAW ARRAY ROWS (header in row 0) ─────────────────
+function buildAddrListFromRawRows(rawRows) {
+  if (!rawRows || rawRows.length < 2) return;
+
+  // Detect column positions — mirrors overview.html detectColumns()
+  const hdr = rawRows[0] || [];
+  let colPoint = -1, colAddr = -1;
+  hdr.forEach((h, i) => {
+    const s = String(h).toLowerCase().trim();
+    if (s === 'point')                      colPoint = i;
+    if (s === 'location' || s === 'address') colAddr  = i;
+  });
+  // Positional fallbacks matching overview.html
+  if (colPoint === -1) colPoint = 3;
+  if (colAddr  === -1) colAddr  = 6;
+
+  const seen = new Map(); // tpClean -> address
+  for (let i = 1; i < rawRows.length; i++) {
+    const row  = rawRows[i];
+    const tp   = String(row[colPoint] || '').trim();
+    const addr = String(row[colAddr]  || '').trim();
+    if (!tp || !addr) continue;
+    if (tp.toUpperCase().startsWith('R ')) continue; // skip rectifier rows
+    if (!/^tp\s*\d/i.test(tp)) continue;
     const tpClean = tp.replace(/\.0+$/, '').replace(/(\d+)\.0*$/, '$1');
     if (!seen.has(tpClean)) seen.set(tpClean, addr);
   }
 
-  // Sort by TP number
   addrList = [...seen.entries()]
     .map(([tp, address]) => ({ tp, address, placed: false }))
     .sort((a, b) => {
@@ -626,10 +677,11 @@ function buildAddrList() {
       return na - nb;
     });
 
-  // Mark already-placed entries
   syncAddrListPlaced();
   renderAddrList();
 }
+
+// buildAddrList() is now buildAddrListFromRawRows() — defined above near loadData
 
 function syncAddrListPlaced() {
   // Mark address items as placed if a matching pin already exists
@@ -1602,6 +1654,8 @@ function closeEditModal() {
 
 loadPins(); loadRectifier(); renderSidebar(); drawOverlay(); updateRectPanel(); setMode('place');
 restorePDF();
+// Auto-populate address list from overview's cached survey data
+loadAddrListFromStorage();
 </script>
 <script>
 if ("serviceWorker" in navigator) {
