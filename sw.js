@@ -1,10 +1,8 @@
-// CP Scout Service Worker
-// Caches all app pages and CDN assets for offline field use
+// CP Scout Service Worker v8
+const CACHE_NAME = 'cp-scout-v8';
 
-const CACHE_NAME = 'cp-scout-v7';
-
-// All local pages to cache on install
-const STATIC_ASSETS = [
+// HTML pages — never pre-cached, always network-first so updates deploy instantly
+const HTML_PAGES = [
   '/index.html',
   '/map.html',
   '/overview.html',
@@ -13,24 +11,24 @@ const STATIC_ASSETS = [
   '/tools.html',
   '/library.html',
   '/current-map.html',
+];
+
+// Static assets that rarely change — cached for offline use
+const STATIC_ASSETS = [
   '/manifest.json',
   '/icons/icon-192.png',
   '/icons/icon-512.png'
 ];
 
-// CDN assets — cached on first use (network-first, then cache)
-const CDN_ASSETS = [
-  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'
+// CDN assets — network first, cached as fallback
+const CDN_ORIGINS = [
+  'cdnjs.cloudflare.com'
 ];
 
-// ── INSTALL: cache all static assets ──────────────────────────────────────
+// ── INSTALL ────────────────────────────────────────────────────────────────
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      console.log('[CP Scout SW] Caching static assets');
-      // Cache local files — fail silently on missing placeholders
       return Promise.allSettled(
         STATIC_ASSETS.map(url =>
           cache.add(url).catch(e => console.warn('[SW] Could not cache:', url, e))
@@ -40,7 +38,7 @@ self.addEventListener('install', event => {
   );
 });
 
-// ── ACTIVATE: clean up old caches ─────────────────────────────────────────
+// ── ACTIVATE: wipe all old caches ─────────────────────────────────────────
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
@@ -48,7 +46,7 @@ self.addEventListener('activate', event => {
         keys
           .filter(key => key !== CACHE_NAME)
           .map(key => {
-            console.log('[CP Scout SW] Deleting old cache:', key);
+            console.log('[SW] Deleting old cache:', key);
             return caches.delete(key);
           })
       )
@@ -56,12 +54,39 @@ self.addEventListener('activate', event => {
   );
 });
 
-// ── FETCH: serve from cache when offline ──────────────────────────────────
+// ── FETCH ──────────────────────────────────────────────────────────────────
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // For CDN requests: try network first, fall back to cache
-  const isCDN = CDN_ASSETS.some(cdn => event.request.url.startsWith(cdn.split('/').slice(0,3).join('/')));
+  // HTML pages — ALWAYS network first, NO cache fallback for html
+  // This ensures deployed updates are always picked up immediately
+  const isHTML = HTML_PAGES.includes(url.pathname) ||
+                 url.pathname === '/' ||
+                 url.pathname.endsWith('.html');
+  if (isHTML) {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-cache' })
+        .then(response => {
+          // Update cache with fresh version but serve the fresh response
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => {
+          // Only use cache as last resort when offline
+          return caches.match(event.request).then(cached => {
+            if (cached) return cached;
+            return caches.match('/index.html');
+          });
+        })
+    );
+    return;
+  }
+
+  // CDN assets — network first, cache fallback
+  const isCDN = CDN_ORIGINS.some(origin => url.hostname.includes(origin));
   if (isCDN) {
     event.respondWith(
       fetch(event.request)
@@ -77,7 +102,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // For local app pages: network first, fall back to cache when offline
+  // Everything else — network first, cache fallback
   event.respondWith(
     fetch(event.request)
       .then(response => {
@@ -87,11 +112,6 @@ self.addEventListener('fetch', event => {
         }
         return response;
       })
-      .catch(() => {
-        return caches.match(event.request).then(cached => {
-          if (cached) return cached;
-          if (event.request.mode === 'navigate') return caches.match('/index.html');
-        });
-      })
+      .catch(() => caches.match(event.request))
   );
 });
