@@ -307,6 +307,7 @@
         <span class="addr-sec-title">📍 Test Points</span>
         <span class="addr-sec-count" id="addr-count">Loading…</span>
         <button onclick="loadAddrListFromStorage()" style="font-size:9px;padding:2px 7px;background:transparent;border:1px solid var(--border);color:var(--text-muted);cursor:pointer;font-family:inherit;margin-left:4px" title="Reload from overview data">↻</button>
+        <button onclick="clearAddrList()" style="font-size:9px;padding:2px 7px;background:transparent;border:1px solid rgba(240,64,64,0.4);color:rgba(240,64,64,0.6);cursor:pointer;font-family:inherit;margin-left:3px" title="Clear address list">✕</button>
       </div>
       <div class="addr-place-hint" id="addr-hint">Click an address below, then click its location on the map</div>
       <div class="addr-list" id="addr-list">
@@ -597,13 +598,13 @@ async function loadData(input) {
     const wb   = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
     const ws   = wb.Sheets[wb.SheetNames[0]];
     // Store raw arrays (header:1) into localStorage so overview and map share same cache key
-    const rawRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    const rawRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
     try {
       localStorage.setItem('cp409_surveyData',  JSON.stringify(rawRows));
       localStorage.setItem('cp409_surveyFileName', file.name);
     } catch(e) { console.warn('Could not cache survey data:', e); }
     // Also build object-keyed version for internal applyDataToPoints use
-    mvData = XLSX.utils.sheet_to_json(ws, { defval: '' });
+    mvData = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
     document.getElementById('status-data').textContent = mvData.length + ' ROWS';
     setMsg('Spreadsheet loaded — ' + mvData.length + ' rows. Click Apply Data to recolor.');
     buildAddrListFromRawRows(rawRows);
@@ -639,6 +640,27 @@ function loadAddrListFromStorage() {
     document.getElementById('addr-count').textContent = 'Error loading data';
     setMsg('Error loading cached data: ' + e.message);
   }
+}
+
+// ── CLEAR ADDRESS LIST ────────────────────────────────────────────────────────
+function clearAddrList() {
+  if (!addrList.length) return;
+  if (!confirm('Clear the address list? This does not remove placed pins.')) return;
+  addrList     = [];
+  selectedAddr = null;
+  mvData       = [];
+  document.getElementById('addr-hint').classList.remove('show');
+  document.getElementById('addr-count').textContent = '0 addresses';
+  document.getElementById('status-data').textContent = 'NO DATA';
+  document.getElementById('data-name').textContent   = 'No file loaded';
+  document.getElementById('data-name').classList.add('none');
+  document.getElementById('addr-list').innerHTML = `
+    <div style="padding:12px;font-size:10px;color:var(--text-muted);text-align:center;line-height:1.8">
+      No test points loaded yet.<br>
+      Upload a spreadsheet in<br>
+      <a href="overview.html" style="color:var(--teal)">Overview</a> to populate this list.
+    </div>`;
+  setMsg('Address list cleared.');
 }
 
 // ── BUILD ADDRESS LIST FROM RAW ARRAY ROWS (header in row 0) ─────────────────

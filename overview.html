@@ -222,7 +222,7 @@ function handleFile(input) {
       const wb   = XLSX.read(e.target.result, { type: 'array', cellDates: true });
       const ws   = wb.Sheets[wb.SheetNames[0]];
       // Read with header:1 to get raw arrays so we can detect column positions
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
       rawData = rows;
       // Persist data so it survives tab navigation
       try {
@@ -878,16 +878,16 @@ function renderCard(p) {
             <div class="ac-read-val" style="color:${offReadColor}">${p.offRead !== null ? (p.offRead*1000).toFixed(0)+'mV' : '—'}</div>
           </div>
           <div class="ac-read-block">
-            <div class="ac-read-label">On-Read</div>
-            <div class="ac-read-val" style="color:${onReadColor}">${p.onRead !== null ? (p.onRead*1000).toFixed(0)+'mV' : '—'}</div>
+            <div class="ac-read-label">Off Limit</div>
+            <div class="ac-read-val" style="color:${p.failingThreshold ? 'var(--red)' : p.offLimit !== null ? 'var(--text-muted)' : 'var(--text-muted)'}">${p.offLimit !== null ? (p.offLimit*1000).toFixed(0)+'mV' : '—'}</div>
           </div>
           <div class="ac-read-block">
             <div class="ac-read-label">ON/OFF Gap</div>
             <div class="ac-diff-val" style="color:${diffColor}">${p.diff !== null ? p.diff+'mV' : '—'}</div>
           </div>
           <div class="ac-read-block">
-            <div class="ac-read-label">Off Limit</div>
-            <div class="ac-read-val" style="color:${p.failingThreshold && !p.onFailing ? 'var(--red)' : p.offLimit !== null ? 'var(--text-muted)' : 'var(--text-muted)'}">${p.offLimit !== null ? (p.offLimit*1000).toFixed(0)+'mV' : '—'}</div>
+            <div class="ac-read-label">On-Read</div>
+            <div class="ac-read-val" style="color:${onReadColor}">${p.onRead !== null ? (p.onRead*1000).toFixed(0)+'mV' : '—'}</div>
           </div>
           <div class="ac-read-block">
             <div class="ac-read-label">On Limit</div>
