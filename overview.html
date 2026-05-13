@@ -295,7 +295,8 @@ function normTP(s) {
 // ── LIMIT STORAGE ─────────────────────────────────────────────────────────────
 // Saves lower limits keyed by station so they persist across sessions
 // and are available when Book1 (no limit column) is uploaded
-let savedLimits = {}; // { tp: lowerLimit } for current station
+// Format: { tp: { off: offLimit, on: onLimit } }
+let savedLimits = {};
 let currentStation = '';
 
 function limitsKey(station) {
@@ -318,8 +319,13 @@ function loadLimits(station) {
   } catch(e) { savedLimits = {}; }
 }
 
+// Returns the off-read lower limit for a TP (used as fallback when no limit col in file)
+// Handles both new { off, on } format and legacy scalar format
 function getLimitForTP(tp) {
-  return savedLimits[tp] ?? null;
+  const entry = savedLimits[tp];
+  if (entry == null) return null;
+  if (typeof entry === 'object') return entry.off ?? entry.on ?? null;
+  return entry; // legacy scalar
 }
 
 
@@ -334,7 +340,8 @@ function parseData(rows) {
 
   // First pass: detect station and extract any limits present in this file
   let detectedStation = '';
-  const extractedLimits = {}; // tp -> lowerLimit from this file
+  // tp -> { off: lowerLimitForOffRead, on: lowerLimitForOnRead }
+  const extractedLimits = {};
   const hasLimitCol = cols.lowerLimit !== -1;
 
   for (let i = startRow; i < rows.length; i++) {
@@ -346,15 +353,17 @@ function parseData(rows) {
     if (sta && !detectedStation) detectedStation = sta;
 
     if (hasLimitCol) {
-      // Use off-read lower limit (IO row) — identified by read type
       const rt = cols.readType !== -1 ? String(row[cols.readType] || '').toUpperCase() : '';
       const isOffRow = rt.includes('IO') || rt.includes(' I ');
-      // Also try Current Point Lower Limit column if present
-      const llCol = cols.lowerLimit;
-      const llStr = String(row[llCol] || '').replace(/[Vv\s]/g,'').trim();
+      const isOnRow  = rt.includes('ON');
+      const llStr = String(row[cols.lowerLimit] || '').replace(/[Vv\s]/g,'').trim();
       const ll    = parseFloat(llStr);
-      if (!isNaN(ll) && (isOffRow || !extractedLimits[tp])) {
-        extractedLimits[tp] = ll;
+      if (!isNaN(ll)) {
+        if (!extractedLimits[tp]) extractedLimits[tp] = { off: null, on: null };
+        if (isOffRow) extractedLimits[tp].off = ll;
+        else if (isOnRow) extractedLimits[tp].on = ll;
+        // If read type unknown, store as off-limit fallback only if not yet set
+        else if (extractedLimits[tp].off === null) extractedLimits[tp].off = ll;
       }
     }
   }
@@ -398,10 +407,11 @@ function parseData(rows) {
 
     const tp = normTP(point);
 
-    // Lower limit: from this file, or from saved limits
+    // Lower limit: pick off or on limit based on this record's readType
     let lowerLimit = null;
-    if (hasLimitCol && extractedLimits[tp] !== undefined) {
-      lowerLimit = extractedLimits[tp];
+    const limEntry = hasLimitCol ? extractedLimits[tp] : null;
+    if (limEntry) {
+      lowerLimit = (readType === 'on') ? (limEntry.on ?? limEntry.off) : (limEntry.off ?? limEntry.on);
     } else {
       lowerLimit = getLimitForTP(tp);
     }
