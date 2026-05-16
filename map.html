@@ -93,9 +93,14 @@
   .addr-item { display:flex; align-items:center; gap:8px; padding:7px 10px; margin-bottom:3px; border:1px solid var(--border); background:var(--panel); cursor:pointer; transition:all .15s; }
   .addr-item:hover { border-color:var(--teal); background:rgba(77,217,232,0.08); }
   .addr-item.selected { border-color:var(--teal); background:rgba(77,217,232,0.18); box-shadow:0 0 0 1px var(--teal); }
-  .addr-item.placed { opacity:0.55; }
-  .addr-item.placed .addr-name { text-decoration:line-through; color:var(--text-muted); }
-  .addr-check { font-size:11px; color:var(--green); flex-shrink:0; width:14px; text-align:center; }
+  /* Unplaced: muted, waiting for action */
+  .addr-item:not(.placed) .addr-tp   { color:var(--text-muted); }
+  .addr-item:not(.placed) .addr-name { color:var(--text-muted); font-size:10px; }
+  /* Placed: bold white, slightly larger — clearly done, not deleted */
+  .addr-item.placed { border-color:rgba(106,115,125,0.5); background:rgba(42,171,184,0.07); }
+  .addr-item.placed .addr-tp   { color:var(--teal); font-size:10px; }
+  .addr-item.placed .addr-name { color:var(--text); font-size:11px; font-weight:bold; }
+  .addr-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; border:1.5px solid rgba(255,255,255,0.2); }
   .addr-tp { font-size:9px; color:var(--teal); font-weight:bold; flex-shrink:0; min-width:32px; }
   .addr-name { font-size:10px; color:var(--text); flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .addr-section { border-bottom:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; flex:1; min-height:0; }
@@ -294,11 +299,6 @@
         <div class="rect-addr" id="rect-addr">Not placed</div>
         <div id="rect-readings"></div>
       </div>
-    </div>
-
-    <div class="tp-header">Test Points &nbsp;<span id="tp-count">0</span></div>
-    <div class="tp-list" id="tp-list">
-      <div style="padding:12px;font-size:10px;color:var(--text-muted);text-align:center">No pins placed yet</div>
     </div>
 
     <!-- Address list from overview survey data -->
@@ -725,14 +725,28 @@ function renderAddrList() {
   const placed = addrList.filter(a => a.placed).length;
   countEl.textContent = `${placed}/${addrList.length} placed`;
 
+  // Build a quick lookup of pin color by tp number for the dot
+  const pinColorByTp = {};
+  for (const p of pins) {
+    const key = p.tpNum.replace(/\.0+$/,'').replace(/(\d+)\.0*$/,'$1');
+    pinColorByTp[key] = p.color || 'none';
+  }
+  const DOT_COLORS = { red:'#f04040', orange:'#f08020', yellow:'#e8d020', green:'#30c860', none:'#888' };
+
   list.innerHTML = '';
   for (const item of addrList) {
     const div = document.createElement('div');
     div.className = 'addr-item' +
       (item === selectedAddr ? ' selected' : '') +
       (item.placed ? ' placed' : '');
+
+    // Dot: colored if placed (matches pin on map), hollow grey if not yet placed
+    const pinColor = item.placed ? (DOT_COLORS[pinColorByTp[item.tp]] || '#888') : 'transparent';
+    const dotBorder = item.placed ? 'none' : '1.5px solid #666';
+    const dotHtml = `<span class="addr-dot" style="background:${pinColor};border:${dotBorder}"></span>`;
+
     div.innerHTML = `
-      <span class="addr-check">${item.placed ? '✓' : ''}</span>
+      ${dotHtml}
       <span class="addr-tp">${item.tp}</span>
       <span class="addr-name" title="${item.address}">${item.address}</span>`;
     div.addEventListener('click', () => selectAddr(item));
@@ -1026,7 +1040,6 @@ function drawOverlay() {
     }
   }
   document.getElementById('status-pins').textContent = pins.length;
-  document.getElementById('tp-count').textContent    = pins.length;
 
   // Draw rectifier marker
   if (rectifier) {
@@ -1129,29 +1142,7 @@ function colorReason(pin) {
 }
 
 function renderSidebar() {
-  const list   = document.getElementById('tp-list');
-  const sorted = [...pins].sort((a,b) => (parseInt(a.tpNum.replace(/\D/g,''))||0) - (parseInt(b.tpNum.replace(/\D/g,''))||0));
-  if (!sorted.length) { list.innerHTML = '<div style="padding:12px;font-size:10px;color:var(--text-muted);text-align:center">No pins placed yet</div>'; renderAlertPanel(); return; }
-  list.innerHTML = '';
-  for (const pin of sorted) {
-    const c   = COLORS[pin.color] || COLORS.none;
-    const div = document.createElement('div');
-    div.className = 'tp-item';
-    const dc = pin.diff !== null && pin.diff < 60 ? 'var(--red-solid)' : pin.diff !== null && pin.diff > 100 ? 'var(--green-solid)' : 'var(--yellow-solid)';
-    div.innerHTML = `
-      <div class="tp-dot" style="background:${c.stroke}"></div>
-      <div class="tp-info">
-        <div class="tp-name">${pin.tpNum} — ${pin.address}</div>
-        <div class="tp-reads">${pin.offRead !== null
-          ? `Off: <b>${pin.offRead.toFixed(3)}V</b> | On: ${pin.onRead.toFixed(3)}V | <span style="color:${dc}">Δ${pin.diff}mV</span>`
-          : '<span style="color:var(--text-muted)">No data matched</span>'}</div>
-      </div>
-      <button class="tp-delete" onclick="openEditModal(${pin.id},event)" title="Edit" style="color:var(--teal-dim);font-size:13px">✏</button>
-      <button class="tp-delete" onclick="deletePin(${pin.id},event)" title="Remove">×</button>`;
-    div.addEventListener('click', () => { flashPin(pin); showDetail(pin, null); });
-    list.appendChild(div);
-  }
-  // Keep address list in sync
+  // Keep address list in sync with placed pins
   if (addrList.length) { syncAddrListPlaced(); renderAddrList(); }
   renderAlertPanel();
 }
