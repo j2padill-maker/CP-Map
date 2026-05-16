@@ -1158,7 +1158,8 @@ function placeNextUnplaced(x, y) {
   savePins(); renderSidebar(); drawOverlay();
 
   const remaining = pins.filter(p => !p.placed).length;
-  setMsg(`Placed: ${target.address} (${target.amps.toFixed(3)}A). ${remaining} still unplaced.`);
+  const ampsStr = (target.amps != null && !isNaN(target.amps)) ? parseFloat(target.amps).toFixed(3) + 'A' : 'no amps';
+  setMsg(`Placed: ${target.address} (${ampsStr}). ${remaining} still unplaced.`);
 }
 
 // ── DRAG FROM SIDEBAR ONTO MAP ────────────────────────────────────────────────
@@ -1196,7 +1197,8 @@ mapArea.addEventListener('drop', e => {
     pendingPlacement = null;
     savePins(); renderSidebar(); drawOverlay();
     const remaining = pins.filter(p => !p.placed).length;
-    setMsg(`Placed: ${pin.address} (${pin.amps.toFixed(3)}A). ${remaining} still unplaced.`);
+    const ampsStr = (pin.amps != null && !isNaN(pin.amps)) ? parseFloat(pin.amps).toFixed(3) + 'A' : 'no amps';
+    setMsg(`Placed: ${pin.address} (${ampsStr}). ${remaining} still unplaced.`);
   }
   draggingFeId = null;
 });
